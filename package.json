@@ -1,0 +1,8 @@
+{
+  "name": "chesspi-board",
+  "version": "1.0.0",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "@netlify/blobs": "^8.1.0"
+  }
+}
