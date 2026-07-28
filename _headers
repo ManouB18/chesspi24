@@ -1,0 +1,6 @@
+# Long-term caching for the game's sound effects. These files never change
+# once shipped (a new sound = a new file name), so it's safe to let browsers
+# cache them for a full year instead of re-requesting them on every visit —
+# this is what actually cuts down on repeat Netlify requests.
+/sounds/*.mp3
+  Cache-Control: public, max-age=31536000, immutable
