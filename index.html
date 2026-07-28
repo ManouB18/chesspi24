@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Pi - Play & Learn</title>
+    <!-- Adaptive layout: set the device class as early as possible so the
+         page never flashes the wrong layout before script.js runs at the
+         end of body. script.js re-applies/keeps this in sync afterward
+         (e.g. on resize/rotation). -->
+    <script>
+        (function () {
+            var w = window.innerWidth;
+            var h = window.innerHeight;
+            var cls = w >= 1024 ? 'device-desktop' : (w >= 768 ? 'device-tablet' : 'device-mobile');
+            var orientationCls = w > h ? 'orientation-landscape' : 'orientation-portrait';
+            document.documentElement.classList.add(cls, orientationCls);
+        })();
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chess.js@0.10.3/chess.min.js"></script>
+    <script src="https://unpkg.com/i18next@latest/dist/umd/i18next.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+    <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+<script>
+  Pi.init({ version: "2.0", sandbox: false });  // Set sandbox: false for production
+</script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Welcome Page -->
+        <div class="page welcome-page active">
+            <div class="welcome-content">
+                <img src="logo.png" alt="Chess Pi Logo" class="welcome-logo">
+                <h1 class="welcome-title">Chess Pi</h1>
+                <p class="welcome-subtitle">Your mind is the algorithm. The board is your domain. Play, Calculate, Conquer.</p>
+                <div class="progress-bar">
+                    <div class="progress" id="welcome-progress"></div>
+                </div>
+            </div>
+        </div>
+        <!-- Theme Selection Page -->
+        <div class="page theme-page">
+            <h2 class="page-title">Choose Your Board Theme</h2>
+            <div class="options-container">
+                <div class="option-card selected" data-theme="brown">
+                    <i class="fas fa-mug-hot option-icon"></i>
+                    <div class="option-name">Brown</div>
+                    <div class="option-desc">Classic Tan</div>
+                </div>
+                <div class="option-card locked" data-theme="green">
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-leaf option-icon"></i>
+                    <div class="option-name">Green</div>
+                    <div class="option-desc">Fresh Green</div>
+                </div>
+                <div class="option-card locked" data-theme="pink">
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-heart option-icon"></i>
+                    <div class="option-name">Pink</div>
+                    <div class="option-desc">Soft Rose</div>
+                </div>
+                <div class="option-card locked" data-theme="blue">
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-water option-icon"></i>
+                    <div class="option-name">Blue</div>
+                    <div class="option-desc">Pillow Style</div>
+                </div>
+            </div>
+            <div class="navigation-dots">
+                <div class="dot" data-page="0"></div>
+                <div class="dot active" data-page="1"></div>
+                <div class="dot" data-page="2"></div>
+                <div class="dot" data-page="3"></div>
+                <div class="dot" data-page="4"></div>
+            </div>
+        </div>
+        <!-- Piece Set Selection Page -->
+        <div class="page pieceset-page">
+            <h2 class="page-title">Choose Your Piece Set</h2>
+            <div class="options-container">
+                <div class="option-card selected" data-piece-set="neo">
+                    <img class="option-piece-preview" src="https://images.chesscomfiles.com/chess-themes/pieces/neo/150/wn.png" alt="Neo knight">
+                    <div class="option-name">Neo</div>
+                    <div class="option-desc">Modern Classic</div>
+                </div>
+                <div class="option-card locked" data-piece-set="wood">
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <img class="option-piece-preview" src="https://images.chesscomfiles.com/chess-themes/pieces/wood/150/wn.png" alt="Wood knight">
+                    <div class="option-name">Wood</div>
+                    <div class="option-desc">Classic Wooden</div>
+                </div>
+                <div class="option-card locked" data-piece-set="glass">
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <img class="option-piece-preview" src="https://images.chesscomfiles.com/chess-themes/pieces/glass/150/wn.png" alt="Glass knight">
+                    <div class="option-name">Glass</div>
+                    <div class="option-desc">Modern Glass</div>
+                </div>
+                <div class="option-card locked" data-piece-set="marble">
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <img class="option-piece-preview" src="https://images.chesscomfiles.com/chess-themes/pieces/marble/150/wn.png" alt="Marble knight">
+                    <div class="option-name">Marble</div>
+                    <div class="option-desc">Elegant Marble</div>
+                </div>
+            </div>
+            <div class="navigation-dots">
+                <div class="dot" data-page="0"></div>
+                <div class="dot" data-page="1"></div>
+                <div class="dot active" data-page="2"></div>
+                <div class="dot" data-page="3"></div>
+                <div class="dot" data-page="4"></div>
+            </div>
+        </div>
+        <!-- Difficulty Selection Page -->
+        <div class="page difficulty-page">
+            <h2 class="page-title">Choose Difficulty Level</h2>
+            <div class="options-container">
+                <div class="option-card selected" data-difficulty="easy">
+                    <i class="fas fa-seedling option-icon"></i>
+                    <div class="option-name">Easy</div>
+                    <div class="option-desc">For Beginners</div>
+                    <div class="difficulty-time-info">No time limit</div>
+                    <div class="difficulty-time-info">No extra time</div>
+                </div>
+                <div class="option-card locked" data-difficulty="medium">
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-user option-icon"></i>
+                    <div class="option-name">Medium</div>
+                    <div class="option-desc">Casual Play</div>
+                    <div class="difficulty-time-info">15 min</div>
+                    <div class="difficulty-time-info">1 extra time (1 min)</div>
+                </div>
+                <div class="option-card locked" data-difficulty="hard">
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-robot option-icon"></i>
+                    <div class="option-name">Hard</div>
+                    <div class="option-desc">Challenge</div>
+                    <div class="difficulty-time-info">10 min</div>
+                    <div class="difficulty-time-info">1 extra time (1 min)</div>
+                </div>
+                <div class="option-card locked" data-difficulty="expert">
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-brain option-icon"></i>
+                    <div class="option-name">Expert</div>
+                    <div class="option-desc">For Masters</div>
+                    <div class="difficulty-time-info">5 min</div>
+                    <div class="difficulty-time-info">2 extra times (1 min each)</div>
+                </div>
+            </div>
+            <div class="navigation-dots">
+                <div class="dot" data-page="0"></div>
+                <div class="dot" data-page="1"></div>
+                <div class="dot" data-page="2"></div>
+                <div class="dot active" data-page="3"></div>
+                <div class="dot" data-page="4"></div>
+            </div>
+        </div>
+        <!-- Main Game Page -->
+        <div class="page game-page">
+            <div class="container">
+                <main class="game-container">
+                    <!-- Game info container: mute (left), timer (center), help icons (right) -->
+                    <div class="game-info-container">
+                        <div class="control-icon" id="mute-btn" role="button" tabindex="0" aria-label="Mute sounds">
+                            <i class="fas fa-volume-up" id="mute-icon"></i>
+                        </div>
+                        <div class="game-timer">
+                            <div class="game-timer-label">Time Left</div>
+                            <div class="game-timer-display" id="game-timer-display">15:00</div>
+                        </div>
+                        <div class="top-controls">
+                            <div class="control-icon" id="advice-btn" role="button" tabindex="0" aria-label="Show advice">
+                                <i class="fas fa-magnifying-glass-chart"></i>
+                            </div>
+                            <div class="control-icon" id="features-btn" role="button" tabindex="0" aria-label="Show help">
+                                <i class="fas fa-circle-info"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="game-status" id="game-status"></div>
+                    <div class="threat-report" id="threat-report"></div>
+                    <!-- Bot (Black) indicator - sits directly above the board, left-aligned with it -->
+                    <div class="side-indicator-row" id="bot-indicator">
+                        <div class="side-indicator-pill">
+                            <div class="player-color-indicator player-black"></div>
+                            <span id="bot-text">Bot AI</span>
+                        </div>
+                        <div class="promo-message" id="promo-message"></div>
+                    </div>
+                    <div class="board-container">
+                        <div class="chessboard" id="chessboard"></div>
+                    </div>
+                    <!-- White (You) indicator - sits directly below the board, left-aligned with it -->
+                    <div class="side-indicator-row" id="white-player-indicator">
+                        <div class="side-indicator-pill">
+                            <div class="player-color-indicator player-white"></div>
+                            <span id="player-text">Guest</span>
+                        </div>
+                    </div>
+                    <div class="controls-bottom">
+                        <div class="control-icon" id="hint-btn" role="button" tabindex="0" aria-label="Get a hint">
+                            <i class="fas fa-lightbulb"></i>
+                            <span>Hint</span>
+                            <div class="feature-count" id="hints-count">2</div>
+                        </div>
+                        <div class="control-icon" id="undo-btn" role="button" tabindex="0" aria-label="Undo last move">
+                            <i class="fas fa-rotate-left"></i>
+                            <span>Undo</span>
+                            <div class="feature-count" id="undos-count">2</div>
+                        </div>
+                        <div class="control-icon" id="threats-btn" role="button" tabindex="0" aria-label="Show threats">
+                            <i class="fas fa-crosshairs"></i>
+                            <span>Threats</span>
+                            <div class="feature-count" id="threats-count">2</div>
+                        </div>
+                        <div class="control-icon" id="extra-time-btn" role="button" tabindex="0" aria-label="Add extra time">
+                            <i class="fas fa-stopwatch"></i>
+                            <span>Time</span>
+                            <div class="feature-count" id="extra-time-count">1</div>
+                        </div>
+                        <div class="control-icon" id="refill-btn" role="button" tabindex="0" aria-label="Refill features with Pi">
+                            <div class="pi-coin-icon">π</div>
+                            <span>Refill</span>
+                        </div>
+                        <div class="control-icon" id="import-pgn-btn" role="button" tabindex="0" aria-label="Import PGN">
+                            <i class="fas fa-upload"></i>
+                            <span>Imp PGN</span>
+                        </div>
+                        <div class="control-icon" id="export-pgn-btn" role="button" tabindex="0" aria-label="Export PGN">
+                            <i class="fas fa-download"></i>
+                            <span>Exp PGN</span>
+                        </div>
+                    </div>
+                </main>
+            </div>
+            <!-- Features Explanation Modal -->
+            <div id="features-modal" class="features-modal">
+                <div class="features-content">
+                    <div class="features-header">
+                        <h2>Game Features Guide</h2>
+                        <span class="features-close"><i class="fas fa-xmark"></i></span>
+                    </div>
+                    <div class="features-section">
+                        <h3> <i class="fas fa-lightbulb"></i> Hint Feature </h3>
+                        <p>The Hint feature provides suggestions for your next move. Each difficulty level gives you a different number of hints:</p>
+                        <ul class="features-list">
+                            <li> <strong>Easy:</strong> 1 hint available </li>
+                            <li> <strong>Medium:</strong> 1 hint available </li>
+                            <li> <strong>Hard:</strong> 1 hint available </li>
+                            <li> <strong>Expert:</strong> 2 hints available </li>
+                        </ul>
+
+                    </div>
+                    <div class="features-section">
+                        <h3> <i class="fas fa-rotate-left"></i> Undo Feature </h3>
+                        <p>The Undo feature allows you to take back your last move. Each difficulty level gives you a different number of undos:</p>
+                        <ul class="features-list">
+                            <li> <strong>Easy:</strong> 1 undo available </li>
+                            <li> <strong>Medium:</strong> 1 undo available </li>
+                            <li> <strong>Hard:</strong> 1 undo available </li>
+                            <li> <strong>Expert:</strong> 2 undos available </li>
+                        </ul>
+                       
+                    </div>
+                    <div class="features-section">
+                        <h3> <i class="fas fa-crosshairs"></i> Threats Feature </h3>
+                        <p>The Threats feature shows you which pieces are threatened by your opponent and which are protected by your pieces. Each difficulty level gives you a different number of threat visualizations:</p>
+                        <ul class="features-list">
+                            <li><span class="threat-level-indicator threat-level-high"></span> <strong>High Threat</strong>: Your valuable pieces (Queen, King) are under immediate attack</li>
+                            <li><span class="threat-level-indicator threat-level-medium"></span> <strong>Medium Threat</strong>: Medium-value pieces (Rooks, Bishops, Knights) are under attack</li>
+                            <li><span class="threat-level-indicator threat-level-low"></span> <strong>Low Threat</strong>: Pawns or less critical pieces are threatened</li>
+                            <li><span class="threat-level-indicator threat-level-potential"></span> <strong>Potential Threat</strong>: Pieces that could be threatened in your opponent's next move</li>
+                            <li><strong>Defended Pieces</strong> are highlighted with a blue border</li>
+                            <li><strong>Threat Sources</strong> are highlighted with pulsating red border</li>
+                        </ul>
+                        <p>The Threat Report provides a detailed analysis of threats, including a summary of immediate and potential threats, detailed list of threatened pieces with their priority levels, and recommended actions to handle the threats. Access the Threat Report via the advice button after using the Threats feature.</p>
+                        
+                    </div>
+                    <div class="features-section">
+                        <h3> <i class="fas fa-stopwatch"></i> Extra Time Feature </h3>
+                        <p>The Extra Time feature gives you additional time when you're running low. Each difficulty level gives you a different number of extra time uses:</p>
+                        <ul class="features-list">
+                            <li> <strong>Easy:</strong> No extra time available </li>
+                            <li> <strong>Medium:</strong> 1 extra time (adds 1 minute) </li>
+                            <li> <strong>Hard:</strong> 1 extra time (adds 1 minute) </li>
+                            <li> <strong>Expert:</strong> 2 extra times (each adds 1 minute) </li>
+                        </ul>
+                    
+                    </div>
+                    <div class="features-section">
+                        <h3> <i class="fas fa-sync-alt"></i> Refill Feature </h3>
+                        <p>The Refill feature becomes active when you've used all available hints, undos, threat visualizations, and extra time uses. When you click the Refill button:</p>
+                        <ul class="features-list">
+                            <li>All features are restored to their maximum capacity</li>
+                            <li>The number of available uses is based on your current difficulty level</li>
+                            <li>You can continue using the features to enhance your gameplay</li>
+                            <li>Refill requires a small Pi payment, calculated at the current market rate, using the Pi Network</li>
+                        </ul>
+                        <p> <strong>Note:</strong> The Refill button only activates when all features are completely depleted. Payments are processed securely via Pi Network. </p>
+                    </div>
+                    <div class="features-section">
+                        <h3> <i class="fas fa-chess-board"></i> Themes </h3>
+                        <p>Choose a look for your board. Brown is free by default, while Green, Pink, and Blue are premium themes you can unlock instantly with Pi:</p>
+                        <ul class="features-list">
+                            <li> <strong>Brown:</strong> Classic tan wooden board — Free </li>
+                            <li> <strong>Green:</strong> Fresh green board — Premium (unlock instantly with Pi) </li>
+                            <li> <strong>Pink:</strong> Soft rose board — Premium (unlock instantly with Pi) </li>
+                            <li> <strong>Blue:</strong> Puffy cushioned blue board — Premium (unlock instantly with Pi) </li>
+                        </ul>
+                        <p> <strong>Note:</strong> Once you unlock a premium theme, it stays unlocked for good. To change or unlock a theme, go back to the theme selection page. The Pi price is calculated at the current market rate. You can also unlock all remaining premium themes at once for 15% off the combined price instead of paying for each one separately. </p>
+                    </div>
+                    <div class="features-section">
+                        <h3> <i class="fas fa-chess-knight"></i> Piece Sets </h3>
+                        <p>Choose how your chess pieces look, independently of your board color. Neo is free by default, while Wood, Glass, and Marble are premium sets you can unlock instantly with Pi:</p>
+                        <ul class="features-list">
+                            <li> <strong>Neo:</strong> Clean, modern piece design — Free </li>
+                            <li> <strong>Wood:</strong> Classic carved wooden pieces — Premium (unlock instantly with Pi) </li>
+                            <li> <strong>Glass:</strong> Sleek translucent glass pieces — Premium (unlock instantly with Pi) </li>
+                            <li> <strong>Marble:</strong> Polished stone marble pieces — Premium (unlock instantly with Pi) </li>
+                        </ul>
+                        <p> <strong>Note:</strong> Any piece set works with any board theme — mix and match freely. Once unlocked, a piece set stays unlocked for good. The Pi price is calculated at the current market rate. You can also unlock all remaining premium piece sets at once for 15% off the combined price instead of paying for each one separately. </p>
+                    </div>
+                    <div class="features-section">
+                        <h3> <i class="fas fa-clock"></i> Time Controls & Difficulty Unlocks </h3>
+                        <p>Each difficulty level has different time controls according to standard chess rules. Only Easy is unlocked from the start — unlock the rest by winning the previous level for free, or instantly with Pi:</p>
+                        <ul class="features-list">
+                            <li> <strong>Easy:</strong> No time limit - Perfect for learning - Unlocked by default </li>
+                            <li> <strong>Medium:</strong> 15 minutes - Standard rapid chess - Beat Easy to unlock for free, or unlock instantly with Pi </li>
+                            <li> <strong>Hard:</strong> 10 minutes - Faster-paced game - Beat Medium to unlock for free, or unlock instantly with Pi </li>
+                            <li> <strong>Expert:</strong> 5 minutes - Blitz chess for experts - Beat Hard to unlock for free, or unlock instantly with Pi </li>
+                        </ul>
+                        <p>The Pi price is calculated at the current market rate. You can also unlock all remaining levels at once for 15% off the combined price instead of paying for each one separately.</p>
+                        <p>The timer starts when the game begins. Time pressure adds excitement to the game!</p>
+                    </div>
+                    <div class="features-section">
+                        <h3> <i class="fas fa-upload"></i> <i class="fas fa-download"></i> PGN Import/Export </h3>
+                        <p>PGN (Portable Game Notation) is a standard format for recording chess games. You can use it to save, share, or analyze your games.</p>
+                        <ul class="features-list">
+                            <li> <strong>Export PGN:</strong> Saves the current game in PGN format for sharing or analysis. </li>
+                            <li> <strong>Import PGN:</strong> Loads a game from PGN format to replay or continue. </li>
+                        </ul>
+                        <p>Use these features to review past games or study famous matches.</p>
+                    </div>
+                    <div class="features-section">
+                        <h3> <i class="fas fa-flag"></i> Surrender Feature </h3>
+                        <p>To surrender as white, double-click on your king when it's your turn. A confirmation dialog will appear. If you confirm, the game ends with black winning, and you'll see options for a new game or settings.</p>
+                    </div>
+                    <p><strong>Note:</strong> If you want to pause the game for a break or to drink a cup of coffee, open the help icon and leave it active.</p>
+                </div>
+            </div>
+            <!-- New Advice Modal -->
+            <div id="advice-modal" class="advice-modal">
+                <div class="advice-content">
+                    <div class="advice-header">
+                        <h2>Threat Report</h2>
+                        <span class="advice-close"><i class="fas fa-xmark"></i></span>
+                    </div>
+                    <div class="advice-section">
+                        <div class="threat-info-header">
+                            <div class="threat-info-title">Threat Analysis</div>
+                        </div>
+                        <div class="threat-info-content">
+                            <div id="threat-summary"></div>
+                            <ul class="threat-info-list" id="threat-details"></ul>
+                            <div class="threat-tip" id="threat-tips"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Game Over Modal -->
+            <div id="game-over-modal" class="game-over-modal">
+                <div class="game-over-content">
+                    <h2 id="game-result-title">Game Over</h2>
+                    <p id="game-result-message"></p>
+                    <div class="game-over-buttons">
+                        <button id="new-game-btn" class="nav-button">New Game</button>
+                        <button id="settings-btn" class="nav-button">Settings</button>
+                        <button id="stats-btn" class="nav-button">Statistics</button>
+                        <button id="leaderboard-btn" class="nav-button">Leaderboard</button>
+                        <button id="next-level-btn" class="nav-button" style="display: none;">Next Level</button>
+                    </div>
+                </div>
+            </div>
+            <!-- Statistics Modal -->
+            <div id="stats-modal" class="modal">
+                <div class="modal-content stats-content">
+                    <span class="close stats-close"><i class="fas fa-xmark"></i></span>
+                    <h2>Game Statistics</h2>
+                    
+                    <div class="stats-tabs">
+                        <button class="tab-button active" data-tab="current">Current Game</button>
+                        <button class="tab-button" data-tab="best">Best Records</button>
+                        <button class="tab-button" data-tab="overall">Overall Statistics</button>
+                    </div>
+                    
+                    <div class="stats-scrollable-content">
+                        <div class="tab-content active" id="current-tab">
+                            <div class="stats-section">
+                                <h3>Current Game</h3>
+                                <div class="stat-item">
+                                    <span class="stat-label">Result:</span>
+                                    <span class="stat-value" id="current-result">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Time Used:</span>
+                                    <span class="stat-value" id="current-time">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Moves:</span>
+                                    <span class="stat-value" id="current-moves">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Difficulty:</span>
+                                    <span class="stat-value" id="current-difficulty">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Features Used:</span>
+                                    <span class="stat-value" id="current-features-used">-</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="tab-content" id="best-tab">
+                            <div class="stats-section">
+                                <h3>Best Records</h3>
+                                <div class="stat-item">
+                                    <span class="stat-label">Best Time:</span>
+                                    <span class="stat-value" id="best-time">-</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Fastest Win:</span>
+                                    <span class="stat-value" id="fastest-win">-</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="tab-content" id="overall-tab">
+                            <div class="stats-section">
+                                <h3>Overall Statistics</h3>
+                                <div class="stat-item">
+                                    <span class="stat-label">Games Played:</span>
+                                    <span class="stat-value" id="total-games">0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Wins:</span>
+                                    <span class="stat-value" id="total-wins">0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Losses:</span>
+                                    <span class="stat-value" id="total-losses">0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Draws:</span>
+                                    <span class="stat-value" id="total-draws">0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Win Rate:</span>
+                                    <span class="stat-value" id="win-rate">0%</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Current Streak:</span>
+                                    <span class="stat-value" id="current-streak">0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Best Streak:</span>
+                                    <span class="stat-value" id="best-streak">0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">Total Features Used:</span>
+                                    <span class="stat-value" id="total-features-used">-</span>
+                                </div>
+                            </div>
+                            
+                            <div class="stats-section">
+                                <h3>By Difficulty</h3>
+                                <div class="difficulty-stats">
+                                    <div class="diff-stat-item">
+                                        <span class="diff-label">Easy:</span>
+                                        <span class="diff-value" id="easy-stats">-</span>
+                                    </div>
+                                    <div class="diff-stat-item">
+                                        <span class="diff-label">Medium:</span>
+                                        <span class="diff-value" id="medium-stats">-</span>
+                                    </div>
+                                    <div class="diff-stat-item">
+                                        <span class="diff-label">Hard:</span>
+                                        <span class="diff-value" id="hard-stats">-</span>
+                                    </div>
+                                    <div class="diff-stat-item">
+                                        <span class="diff-label">Expert:</span>
+                                        <span class="diff-value" id="expert-stats">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button id="stats-back-btn" class="nav-button">Back</button>
+                </div>
+            </div>
+            <!-- Leaderboard Modal (standalone page, separate from Statistics) -->
+            <div id="leaderboard-modal" class="modal">
+                <div class="modal-content stats-content">
+                    <span class="close leaderboard-close"><i class="fas fa-xmark"></i></span>
+                    <h2>Leaderboard — Top Players</h2>
+                    <div class="stats-scrollable-content">
+                        <div class="stats-section">
+                            <p class="leaderboard-note" id="leaderboard-note">Loading...</p>
+                            <ol class="leaderboard-list" id="leaderboard-list"></ol>
+                        </div>
+                    </div>
+                    <button id="leaderboard-back-btn" class="nav-button">Back</button>
+                </div>
+            </div>
+            <!-- Import PGN Modal -->
+            <div id="import-pgn-modal" class="modal">
+                <div class="modal-content">
+                    <span class="close"><i class="fas fa-xmark"></i></span>
+                    <h2>Import PGN</h2>
+                    <textarea id="pgn-input" rows="5" style="width: 100%;"></textarea>
+                    <input type="file" id="pgn-file" accept=".pgn">
+                    <button id="submit-pgn-btn" class="nav-button">Import</button>
+                </div>
+            </div>
+            <!-- Promotion Modal in HTML -->
+            <div id="promotion-modal" class="modal">
+                <div class="modal-content">
+                    <h2>Choose Promotion</h2>
+                    <div class="options-container">
+                        <div class="option-card" data-promotion="q">
+                            <i class="fas fa-chess-queen option-icon"></i>
+                            <div class="option-name">Queen</div>
+                        </div>
+                        <div class="option-card" data-promotion="r">
+                            <i class="fas fa-chess-rook option-icon"></i>
+                            <div class="option-name">Rook</div>
+                        </div>
+                        <div class="option-card" data-promotion="b">
+                            <i class="fas fa-chess-bishop option-icon"></i>
+                            <div class="option-name">Bishop</div>
+                        </div>
+                        <div class="option-card" data-promotion="n">
+                            <i class="fas fa-chess-knight option-icon"></i>
+                            <div class="option-name">Knight</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="surrender-modal" class="modal">
+                <div class="modal-content">
+                    <span class="close"><i class="fas fa-xmark"></i></span>
+                    <h2>Confirm Surrender</h2>
+                    <p>Are you sure you want to surrender?</p>
+                    <button id="confirm-surrender" class="nav-button">Surrender</button>
+                    <button id="cancel-surrender" class="nav-button">Cancel</button>
+                </div>
+            </div>
+        </div>
+        <!-- Navigation Arrows -->
+        <div class="nav-arrows">
+            <div class="nav-arrow left-arrow hidden">
+                <i class="fas fa-chevron-left"></i>
+            </div>
+            <div class="nav-arrow right-arrow">
+                <i class="fas fa-chevron-right"></i>
+            </div>
+        </div>
+        <!-- Unlock/Payment modal: lives outside all .page divs so it can pop
+             up correctly from the theme page, the difficulty page, or the
+             game page alike (an inactive .page has visibility:hidden, which
+             would otherwise hide this too if it were nested inside one). -->
+        <div id="unlock-modal" class="modal">
+            <div class="modal-content unlock-modal-content">
+                <span class="close"><i class="fas fa-xmark"></i></span>
+                <div class="unlock-lock-icon"><i class="fas fa-lock"></i></div>
+                <h2 id="unlock-modal-title">Locked</h2>
+                <p id="unlock-modal-desc">This item is locked.</p>
+                <button id="unlock-pay-btn" class="nav-button unlock-pay-btn">
+                    <div class="pi-coin-icon-small">π</div>
+                    <span id="unlock-price-text">Unlock for 10 π</span>
+                </button>
+                <button id="unlock-all-btn" class="nav-button unlock-all-btn">
+                    <i class="fas fa-unlock"></i>
+                    <span id="unlock-all-text">Unlock All Themes — 25 π</span>
+                </button>
+                <button id="unlock-cancel-btn" class="nav-button unlock-cancel-btn">Maybe Later</button>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+<div id="custom-alert-modal" style="display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.4);">
+  <div style="background-color: #fefefe; margin: 15% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 500px; border-radius: 8px; text-align: center;">
+    <p id="custom-alert-message" style="margin-bottom: 20px; font-size: 16px;"></p>
+    <button id="custom-alert-ok" style="background-color: #04AA6D; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px;">OK</button>
+  </div>
+</div>
+</body>
+</html>
