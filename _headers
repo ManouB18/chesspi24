@@ -1,6 +1,33 @@
-# Long-term caching for the game's sound effects. These files never change
-# once shipped (a new sound = a new file name), so it's safe to let browsers
-# cache them for a full year instead of re-requesting them on every visit —
-# this is what actually cuts down on repeat Netlify requests.
+# Long-term caching for the game's sound effects (including the combined
+# sprite file). These never change once shipped (a new sound = a new file
+# name), so it's safe to let browsers cache them for a full year instead of
+# re-requesting them on every visit — this is what actually cuts down on
+# repeat Netlify requests.
 /sounds/*.mp3
   Cache-Control: public, max-age=31536000, immutable
+
+# Images rarely change. Cache for a week — long enough to skip re-fetching
+# on repeat visits within the same week, short enough that an update still
+# reaches users reasonably fast without needing a filename change.
+/*.png
+  Cache-Control: public, max-age=604800
+/*.jpg
+  Cache-Control: public, max-age=604800
+/favicon.ico
+  Cache-Control: public, max-age=604800
+
+# The service worker script itself must NEVER be cached. If it were, browsers
+# could keep running an old sw.js that still serves a stale, cached Stockfish
+# engine build forever — even after you ship a new CACHE_NAME to force an
+# update. no-cache forces a revalidation check on every load (a cheap 304 if
+# nothing changed, a fresh copy the moment it does).
+/sw.js
+  Cache-Control: no-cache
+
+# Code/styles: no cache-busting filenames yet, so keep this short. The
+# browser still avoids a full re-download on unchanged reloads via a cheap
+# 304 (ETag) instead of a fresh transfer.
+/script.js
+  Cache-Control: public, max-age=300, must-revalidate
+/styles.css
+  Cache-Control: public, max-age=300, must-revalidate
