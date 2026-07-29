@@ -13,6 +13,16 @@
 const axios = require('axios');
 const { getStore } = require('@netlify/blobs');
 
+// See get-leaderboard.js for why this manual-override helper exists.
+function getBlobStore(name) {
+    const siteID = process.env.BLOBS_SITE_ID;
+    const token = process.env.BLOBS_TOKEN;
+    if (siteID && token) {
+        return getStore({ name, siteID, token });
+    }
+    return getStore(name);
+}
+
 const LEADERBOARD_TOP_KEY = '__leaderboard_top50__';
 const TOP_N = 50;
 
@@ -72,7 +82,7 @@ exports.handler = async (event) => {
             updatedAt: new Date().toISOString()
         };
 
-        const store = getStore('leaderboard');
+        const store = getBlobStore('leaderboard');
         await store.setJSON(uid, entry);
 
         // Keep the top-50 blob in sync so get-leaderboard.js never has to
