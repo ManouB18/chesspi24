@@ -19,6 +19,21 @@ const LEADERBOARD_TOP_KEY = '__leaderboard_top50__';
 const MAX_ENTRIES_SCANNED = 1000; // safety cap while listing blob keys (fallback path only)
 const TOP_N = 50;
 
+// Netlify is supposed to auto-inject site ID + token for Blobs at runtime,
+// but on some deploys that auto-configuration doesn't arrive (a known
+// Netlify Blobs issue, independent of anything in this file). BLOBS_SITE_ID
+// and BLOBS_TOKEN are optional manual overrides — set them in Site
+// settings → Environment variables only if you keep seeing
+// "MissingBlobsEnvironmentError" after a clear-cache redeploy.
+function getBlobStore(name) {
+    const siteID = process.env.BLOBS_SITE_ID;
+    const token = process.env.BLOBS_TOKEN;
+    if (siteID && token) {
+        return getStore({ name, siteID, token });
+    }
+    return getStore(name);
+}
+
 async function buildTopFromFullScan(store) {
     let allKeys = [];
     let cursor;
@@ -51,7 +66,7 @@ async function buildTopFromFullScan(store) {
 
 exports.handler = async () => {
     try {
-        const store = getStore('leaderboard');
+        const store = getBlobStore('leaderboard');
 
         let top = await store.get(LEADERBOARD_TOP_KEY, { type: 'json' });
 
