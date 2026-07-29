@@ -2,6 +2,33 @@
   publish = "."
   functions = "netlify/functions"
 
+# Safety net: if a sound/image/script/style path is requested but the file
+# doesn't actually exist, return a real 404 instead of falling through to
+# the SPA catch-all below (which used to silently serve the full 40KB
+# index.html with a 200 status for missing files like a mistyped sound
+# name — wasting bandwidth and making the failure invisible). This does
+# NOT affect any file that actually exists: Netlify always serves a real,
+# existing file over any non-forced redirect rule.
+[[redirects]]
+  from = "/sounds/*"
+  to = "/404.html"
+  status = 404
+
+[[redirects]]
+  from = "/*.mp3"
+  to = "/404.html"
+  status = 404
+
+[[redirects]]
+  from = "/*.png"
+  to = "/404.html"
+  status = 404
+
+[[redirects]]
+  from = "/*.jpg"
+  to = "/404.html"
+  status = 404
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
