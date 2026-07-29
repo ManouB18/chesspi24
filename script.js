@@ -585,15 +585,45 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
    
-    // Sound settings and objects with Lazy Caching (Method 2)
+    // Sound settings: all short gameplay effects are packed into a single
+    // sprite file (sounds/sprite.mp3) so a whole game only costs ONE audio
+    // request instead of one request per distinct sound effect. Offsets
+    // below (ms) were generated from the original individual mp3 files.
     let isMuted = false;
-    const audioCache = {};
+    const SOUND_SPRITE_MAP = {
+        'game-start':    [0, 248],
+        'move-self':     [408, 196],
+        'move-opponent': [764, 196],
+        'capture':       [1121, 223],
+        'promote':       [1503, 248],
+        'castle':        [1912, 275],
+        'illegal':       [2346, 275],
+        'move-check':    [2781, 275],
+        'checkmate':     [3215, 248],
+        'game-end':      [3624, 248],
+        'game-win':      [4032, 249],
+        'game-lose':     [4440, 586],
+        'game-draw':     [5187, 352],
+        'tenseconds':    [5699, 536]
+    };
+    const spriteHowl = new Howl({
+        src: ['sounds/sprite.mp3'],
+        sprite: SOUND_SPRITE_MAP
+    });
+    const activeSoundIds = {};
     const sounds = new Proxy({}, {
         get: function(target, name) {
-            if (!audioCache[name]) {
-                audioCache[name] = new Howl({ src: [`sounds/${name}.mp3`] });
-            }
-            return audioCache[name];
+            return {
+                play: function() {
+                    activeSoundIds[name] = spriteHowl.play(name);
+                    return activeSoundIds[name];
+                },
+                stop: function() {
+                    if (activeSoundIds[name] !== undefined) {
+                        spriteHowl.stop(activeSoundIds[name]);
+                    }
+                }
+            };
         }
     });
    
