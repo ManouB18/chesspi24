@@ -25,6 +25,16 @@ const { getStore } = require('@netlify/blobs');
 const CACHE_KEY = 'pi-usd-price';
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+// See get-leaderboard.js for why this manual-override helper exists.
+function getBlobStore(name) {
+    const siteID = process.env.BLOBS_SITE_ID;
+    const token = process.env.BLOBS_TOKEN;
+    if (siteID && token) {
+        return getStore({ name, siteID, token });
+    }
+    return getStore(name);
+}
+
 async function fetchFromCoinGecko() {
     const res = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
         params: { ids: 'pi-network', vs_currencies: 'usd' },
@@ -53,7 +63,7 @@ async function fetchFromCoinMarketCap() {
 exports.handler = async () => {
     let store;
     try {
-        store = getStore('pi-price-cache');
+        store = getBlobStore('pi-price-cache');
     } catch (e) {
         store = null; // Blobs unavailable in this environment; fall through to live fetch only.
     }
