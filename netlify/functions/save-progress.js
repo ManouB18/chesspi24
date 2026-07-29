@@ -8,6 +8,16 @@
 const axios = require('axios');
 const { getStore } = require('@netlify/blobs');
 
+// See get-leaderboard.js for why this manual-override helper exists.
+function getBlobStore(name) {
+    const siteID = process.env.BLOBS_SITE_ID;
+    const token = process.env.BLOBS_TOKEN;
+    if (siteID && token) {
+        return getStore({ name, siteID, token });
+    }
+    return getStore(name);
+}
+
 const DEFAULT_PROGRESS = {
     unlockedLevels: ['easy'],
     unlockedThemes: ['brown'],
@@ -44,7 +54,7 @@ exports.handler = async (event) => {
             return { statusCode: 401, body: JSON.stringify({ error: 'Could not verify Pi user' }) };
         }
 
-        const store = getStore('player-progress');
+        const store = getBlobStore('player-progress');
         const existingProgress = (await store.get(uid, { type: 'json' })) || DEFAULT_PROGRESS;
 
         // Union merge: a level/theme unlocked either before or now stays unlocked.
