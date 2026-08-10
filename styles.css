@@ -100,11 +100,11 @@ body {
         margin-bottom: 4px;
     }
     .game-info-container {
-        padding: 3px 8px;
+        padding: 3px 12px;
         margin-bottom: 4px;
     }
     .controls-bottom {
-        padding: 4px 2px;
+        padding: 4px 10px;
         gap: 1px;
     }
     .control-icon {
@@ -232,6 +232,16 @@ body {
     font-size: 12px;
     z-index: 2;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    transition: var(--transition);
+}
+/* Once a previously-locked item is purchased/unlocked, renderLockState()
+   in script.js swaps this badge's icon from a closed padlock (fa-lock-keyhole) to
+   an open one (fa-unlock-keyhole) and adds .unlocked-badge, instead of just
+   removing the .locked class from the card and leaving the closed-lock
+   icon showing. Green ties it visually to "purchased" the same way the
+   rest of the UI uses green for success/confirmation. */
+.lock-overlay.unlocked-badge {
+    background: rgba(39, 174, 96, 0.85);
 }
 .option-icon {
     font-size: 3rem;
@@ -464,9 +474,12 @@ body {
     display: flex;
     justify-content: space-around; 
     align-items: center;
-    padding: 10px 5px; 
+    padding: 10px 16px; 
     background-color: white;
-    border-radius: 10px;
+    /* Fully rounded "stadium/pill" bar, matching .game-info-container
+       above — extra horizontal padding (16px vs the old 5px) keeps the
+       end buttons from crowding the now much more rounded corners. */
+    border-radius: 999px;
     margin-top: 5px;
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
     flex-shrink: 0;
@@ -480,19 +493,27 @@ body {
     flex-direction: column;
     align-items: center;
     cursor: pointer;
-    padding: 8px 4px;
-    border-radius: 8px;
-    transition: background-color 0.2s;
+    padding: 8px 6px;
+    /* Rounded pill-shaped button "well" around each icon+label, always
+       visible (not just on hover) — matches the reference bottom-nav
+       style where every entry sits in its own soft rounded button. */
+    border-radius: 999px;
+    background-color: #f4f6f9;
+    transition: background-color 0.2s, transform 0.15s ease;
     position: relative;
     flex: 1; 
     max-width: 80px; 
 }
 
 .control-icon:hover {
-    background-color: #f0f0f0;
+    background-color: #e9edf3;
+}
+.control-icon:active {
+    transform: scale(0.95);
 }
 .control-icon i {
     font-size: 16px;
+    line-height: 1;
     margin-bottom: 5px;
     color: #fff;
     width: 32px;
@@ -544,6 +565,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    line-height: 1;
     font-family: Georgia, 'Times New Roman', serif;
     font-weight: bold;
     font-size: 17px;
@@ -608,11 +630,13 @@ body {
 }
 .modal-content {
     background-color: white;
-    margin: 15% auto;
+    margin: 8vh auto;
     padding: 20px;
     border-radius: 10px;
     width: 80%;
     max-width: 500px;
+    max-height: 84vh;
+    overflow-y: auto;
     position: relative;
     text-align: center;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
@@ -628,6 +652,155 @@ body {
 .close:hover {
     color: black;
 }
+/* ===== Live in-game board/piece settings modal ===== */
+.game-settings-modal-content {
+    text-align: left;
+    padding: 16px 18px;
+    margin: 5vh auto;
+}
+.game-settings-modal-content h2 {
+    text-align: center;
+    margin: 0 0 4px;
+    font-size: 19px;
+}
+.game-settings-modal-desc {
+    text-align: center;
+    color: #666;
+    font-size: 11px;
+    margin: 0 0 12px;
+    line-height: 1.3;
+}
+.settings-section + .settings-section {
+    margin-top: 10px;
+}
+.settings-section-title {
+    font-size: 11px;
+    color: #2c3e50;
+    margin: 0 0 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+/* Fixed 4-column grid (never auto-fill/wrap) — every category here has
+   exactly 4 items, so this guarantees a single row per section no matter
+   how narrow the screen is; items just shrink to fit instead of a 4th
+   item wrapping onto a second row. That wrapping was exactly what forced
+   the whole modal to scroll before: 3 sections x 2 rows each didn't fit
+   on one screen, but 3 sections x 1 row each does. */
+.settings-swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+.settings-swatch {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: var(--transition);
+    background-size: cover;
+    background-position: center;
+}
+.settings-swatch:hover {
+    transform: translateY(-2px);
+}
+.settings-swatch.selected {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(43, 112, 197, 0.3);
+}
+.settings-swatch.locked {
+    /* Keep the swatch's own theme/piece-set color fully visible even while
+       locked — the lock badge (see .swatch-lock-badge below) is what
+       communicates "locked", not a grayed-out card. A full desaturating
+       filter here was hiding the theme color on every locked card (i.e.
+       most of them for a non-Premium player), which is what made the
+       Themes grid look uncolored. */
+    opacity: 0.92;
+}
+.settings-swatch .swatch-piece-preview {
+    width: 60%;
+    height: 60%;
+    object-fit: contain;
+    pointer-events: none;
+}
+.settings-swatch .swatch-lock-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+}
+/* Once purchased/unlocked, buildSwatchLockBadge() in script.js swaps this
+   badge's icon to an open padlock and adds this class — same green used
+   for .lock-overlay.unlocked-badge on the theme/pieceset/bot selection
+   pages, so "you own this" reads identically everywhere in the app. */
+.settings-swatch .swatch-lock-badge.unlocked-badge {
+    background: rgba(39, 174, 96, 0.85);
+}
+.settings-swatch .swatch-label {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 8px;
+    font-weight: 600;
+    text-align: center;
+    padding: 1px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Theme swatches: each card is a solid, unmistakable block of its theme's
+   color (not a subtle split) so the Brown/Green/Pink/Blue cards are
+   instantly recognizable as brown/green/pink/blue at a glance. */
+.settings-swatch.theme-swatch-brown { background: linear-gradient(145deg, #d9b78e, #a97a4a); }
+.settings-swatch.theme-swatch-green { background: linear-gradient(145deg, #9fcf7a, #5c8a41); }
+.settings-swatch.theme-swatch-pink { background: linear-gradient(145deg, #f2b4c1, #d16f89); }
+.settings-swatch.theme-swatch-blue { background: linear-gradient(145deg, #9dc6ea, #4f83b3); }
+.settings-swatch.pieceset-swatch {
+    background-color: #f4f1ec;
+}
+.settings-swatch.bot-swatch {
+    background-color: #f4f1ec;
+    flex-direction: column;
+    gap: 2px;
+}
+/* Direct child only — this must NOT also match the lock badge's own <i>
+   (nested one level deeper inside .swatch-lock-badge), otherwise the lock
+   icon inherits this 16px/dark styling instead of the small white/green
+   badge look shared with the theme and piece-set swatches. */
+.settings-swatch.bot-swatch > i {
+    font-size: 16px;
+    color: #2c3e50;
+    pointer-events: none;
+}
+/* Apply row: selections in the modal above are staged (just the "selected"
+   outline moves) until this button is pressed, which is what actually
+   commits them to the board/game. */
+.game-settings-apply-row {
+    display: flex;
+    justify-content: center;
+    margin-top: 14px;
+}
+.game-settings-apply-btn {
+    width: 100%;
+    margin: 0;
+    padding: 11px 20px;
+}
+
 .nav-button {
     background-color: var(--primary-color);
     color: white;
@@ -642,24 +815,6 @@ body {
 }
 .nav-button:hover {
     background-color: #1a5a9e;
-}
-.unlock-all-btn {
-    background: linear-gradient(145deg, #8247e5, #5b2c99);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    color: #fff;
-    border: none;
-    width: 100%;
-    max-width: 260px;
-    margin: 10px auto;
-}
-.unlock-all-btn:hover {
-    background: linear-gradient(145deg, #7238d0, #4c2382);
-}
-.unlock-all-btn.hidden {
-    display: none;
 }
 .settings-buttons {
     display: flex;
@@ -833,9 +988,12 @@ body {
     width: 100%;
     max-width: 650px;
     margin: 0 auto 10px auto;
-    padding: 5px 10px;
+    padding: 5px 14px;
     background-color: white;
-    border-radius: 15px;
+    /* Fully rounded "stadium/pill" bar (large radius always clips to a
+       true pill regardless of the bar's actual height) instead of the
+       previous mild 15px corner rounding. */
+    border-radius: 999px;
     box-shadow: 0 3px 15px rgba(0, 0, 0, 0.1);
     z-index: 20;
     position: relative;
@@ -851,8 +1009,13 @@ body {
     margin: 0 auto;
     box-sizing: border-box;
     overflow: visible;
+    position: relative;
 }
-/* The actual visible "pill" - sized to fit its own content only. */
+/* The actual visible "pill" - sized to fit its own content only. Never
+   shrinks below its natural width (flex-shrink: 0) — previously the
+   default flex-shrink:1 let the promo-message next to it (see below)
+   squeeze this pill down, which had nowhere to give except wrapping the
+   bot's name onto two lines. */
 .side-indicator-pill {
     display: flex;
     align-items: center;
@@ -864,6 +1027,7 @@ body {
     border-radius: 10px;
     padding: 6px 14px;
     width: fit-content;
+    flex-shrink: 0;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     opacity: 0.55;
     transition: opacity 0.25s ease, box-shadow 0.25s ease;
@@ -878,10 +1042,29 @@ body {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* Same one-line guarantee as #player-text above, for the bot's name — this
+   is what actually keeps "Aggressive Attacker" (or any bot personality
+   name) from wrapping in the first place; flex-shrink: 0 on the pill above
+   only stops the *pill* from shrinking, not the text inside it from
+   wrapping if there were ever still not enough room. */
+#bot-text {
+    white-space: nowrap;
+}
 /* Motivational promo message that briefly appears next to the Bot AI
    indicator (e.g. when features run out, or time is almost up). */
+/* Motivational promo message that briefly appears next to the Bot AI
+   indicator (e.g. when features run out, or time is almost up).
+   Positioned absolutely (anchored to the row's right edge, vertically
+   centered on the pill) so it floats OVER the layout instead of
+   participating in it — its own height (it can wrap onto 2 lines on
+   narrow screens) used to add to .side-indicator-row's flex height and
+   push the whole board down for as long as it was visible; as an overlay
+   it can never do that, no matter how much text it wraps to. */
 .promo-message {
-    margin-left: 10px;
+    position: absolute;
+    top: 50%;
+    right: 0;
+    margin-left: 0;
     padding: 6px 12px;
     background: linear-gradient(135deg, #8247e5, #5b2c99);
     color: #fff;
@@ -891,20 +1074,28 @@ body {
     border-radius: 14px;
     box-shadow: 0 2px 8px rgba(91, 44, 153, 0.4);
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-50%) translateY(-4px);
     pointer-events: none;
     transition: opacity 0.4s ease, transform 0.4s ease;
-    max-width: 65%;
+    max-width: 60%;
     overflow-wrap: break-word;
+    text-align: right;
+    z-index: 30;
 }
 .promo-message.visible {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(-50%) translateY(0);
 }
 .top-controls {
     display: flex;
     gap: 5px;
     margin-left: auto; 
+}
+.left-controls {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    margin-right: auto;
 }
 .player-color-indicator {
     width: 20px;
@@ -985,7 +1176,7 @@ body {
     }
 /* ---- START OF MODIFICATION ---- */
     .controls-bottom {
-        padding: 6px 2px;
+        padding: 6px 10px;
         gap: 1px; 
     }
 /* ---- END OF MODIFICATION ---- */
@@ -1144,7 +1335,8 @@ html.device-tablet .feature-count {
     color: #666;
 }
 
-.top-controls .control-icon {
+.top-controls .control-icon,
+.left-controls .control-icon {
     min-width: 45px;
     padding: 4px 3px;
 }
@@ -1654,54 +1846,198 @@ html.device-tablet .feature-count {
     gap: 10px;
 }
 
+.leaderboard-title-icon {
+    color: var(--secondary-color);
+    margin-right: 6px;
+}
+
+/* The leaderboard modal reuses .stats-content but needs more room per
+   row than the Statistics modal, so it gets its own wider sizing here
+   without touching #stats-modal. */
+#leaderboard-modal .stats-content {
+    max-width: 480px;
+    width: 94%;
+    padding: 22px 14px;
+}
+
+@media (max-width: 480px) {
+    #leaderboard-modal .stats-content {
+        max-width: 420px;
+        width: 97%;
+        padding: 18px 8px;
+    }
+}
+
 .leaderboard-note {
-    color: #777;
+    color: #888;
     font-size: 14px;
     text-align: center;
-    margin: 10px 0;
+    margin: 16px 0;
 }
 
 .leaderboard-list {
     list-style: none;
     margin: 0;
-    padding: 0;
+    padding: 4px 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
-.leaderboard-list li {
+.leaderboard-item {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px 10px;
-    border-radius: 8px;
-    margin-bottom: 6px;
-    background-color: #f5f5f5;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: #ffffff;
+    border: 1px solid #eceff3;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
-.leaderboard-list li.leaderboard-me {
-    background-color: rgba(43, 112, 197, 0.15);
-    font-weight: bold;
-    border: 1px solid var(--primary-color);
+.leaderboard-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.1);
+}
+
+/* Top 3 get a subtle tinted, elevated look */
+.leaderboard-top {
+    border-width: 1px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.leaderboard-top.rank-1 {
+    background: linear-gradient(135deg, #fff8e6, #fffdf7);
+    border-color: #f0d68a;
+}
+
+.leaderboard-top.rank-2 {
+    background: linear-gradient(135deg, #f3f5f7, #fdfdfe);
+    border-color: #d7dce2;
+}
+
+.leaderboard-top.rank-3 {
+    background: linear-gradient(135deg, #fdf1e8, #fffaf6);
+    border-color: #eab98c;
+}
+
+.leaderboard-item.leaderboard-me {
+    border: 1.5px solid var(--primary-color);
+    background: rgba(43, 112, 197, 0.07);
+    box-shadow: 0 2px 8px rgba(43, 112, 197, 0.18);
 }
 
 .leaderboard-rank {
-    font-weight: bold;
-    color: var(--primary-color);
-    width: 24px;
     flex-shrink: 0;
+    width: 32px;
     text-align: center;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--primary-color);
+}
+
+.leaderboard-medal {
+    font-size: 22px;
+    line-height: 1;
+}
+
+.leaderboard-info {
+    flex-grow: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
 }
 
 .leaderboard-name {
-    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #22262b;
+    min-width: 0;
+}
+
+.leaderboard-username-text {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
 }
 
-.leaderboard-score {
+/* VIP badge: active Pi Premium subscriber, or has paid Pi for at least
+   one theme/piece-set/level unlock (see isVipMember() in script.js). */
+.leaderboard-vip-badge {
     flex-shrink: 0;
-    color: #555;
-    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #f5c451, #d1971e);
+    color: #4a2a00;
+    font-size: 10px;
+    box-shadow: 0 1px 4px rgba(209, 151, 30, 0.5);
+    cursor: help;
+}
+
+.leaderboard-stats {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    row-gap: 2px;
+    gap: 6px;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.leaderboard-wins {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--secondary-color);
+    font-weight: 600;
+}
+
+.leaderboard-wins i {
+    font-size: 11px;
+}
+
+.leaderboard-dot {
+    color: #c7ccd3;
+}
+
+.leaderboard-winrate {
+    flex-shrink: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--primary-color);
+    background: rgba(43, 112, 197, 0.1);
+    padding: 4px 10px;
+    border-radius: 999px;
+    min-width: 42px;
+    text-align: center;
+}
+
+.leaderboard-points-label {
+    font-size: 10px;
+    font-weight: 600;
+    margin-left: 2px;
+    opacity: 0.75;
+}
+
+.leaderboard-top.rank-1 .leaderboard-winrate {
+    color: #a67c00;
+    background: rgba(230, 180, 0, 0.16);
+}
+
+.leaderboard-top.rank-3 .leaderboard-winrate {
+    color: #a05a1f;
+    background: rgba(201, 123, 61, 0.16);
 }
 
 .diff-stat-item {
@@ -1803,7 +2139,7 @@ html.device-tablet .feature-count {
     }
 }
 
-/* ===== Unlock modal (paying to unlock a locked level/theme) ===== */
+/* ===== Unlock modal (paying to unlock a locked level/theme/piece set) ===== */
 .unlock-modal-content {
     text-align: center;
 }
@@ -1819,6 +2155,46 @@ html.device-tablet .feature-count {
     justify-content: center;
     margin: 10px auto 15px;
     box-shadow: 0 4px 10px rgba(91, 44, 153, 0.4);
+}
+/* Small category pill above the title (Difficulty Level / Board Theme /
+   Piece Set / Bundle) — kept from the previous layout since it's the only
+   thing telling the player at a glance which kind of item this modal is
+   for; script.js (showUnlockModal) sets its text directly. */
+.unlock-type-badge {
+    display: inline-block;
+    background: #f1ebfb;
+    color: #6a35b8;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 20px;
+    margin-bottom: 8px;
+}
+/* "You already used your free trial for this" pill — hidden by default,
+   shown by script.js only for a locked item the player has already
+   sampled once. */
+.unlock-tried-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    text-align: left;
+    background: #fff6e6;
+    color: #8a5c00;
+    font-size: 12.5px;
+    line-height: 1.4;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin: 10px auto 0;
+    max-width: 320px;
+}
+.unlock-tried-note i {
+    margin-top: 1px;
+    flex-shrink: 0;
+}
+.unlock-tried-note.hidden {
+    display: none;
 }
 .pi-coin-icon-small {
     width: 20px;
@@ -1849,6 +2225,24 @@ html.device-tablet .feature-count {
 .unlock-pay-btn:hover {
     background: linear-gradient(145deg, #7238d0, #4c2382);
 }
+.unlock-all-btn {
+    background: linear-gradient(145deg, #8247e5, #5b2c99);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #fff;
+    border: none;
+    width: 100%;
+    max-width: 260px;
+    margin: 10px auto;
+}
+.unlock-all-btn:hover {
+    background: linear-gradient(145deg, #7238d0, #4c2382);
+}
+.unlock-all-btn.hidden {
+    display: none;
+}
 .unlock-cancel-btn {
     background: transparent;
     color: #777;
@@ -1859,6 +2253,212 @@ html.device-tablet .feature-count {
 }
 .unlock-cancel-btn:hover {
     background: #f2f2f2;
+}
+
+/* ===== Pi Premium crown button (top-controls) ===== */
+.premium-crown-btn i {
+    color: #d1971e;
+    transition: color 0.2s, text-shadow 0.2s;
+}
+.premium-crown-btn:hover i {
+    color: #b5790a;
+}
+#premium-btn.premium-active i {
+    color: #f5c451;
+    text-shadow: 0 0 6px rgba(245, 196, 81, 0.75);
+}
+/* Gentle glow so a subscriber can always tell Premium is active at a glance */
+@keyframes premiumCrownGlow {
+    0%, 100% { text-shadow: 0 0 4px rgba(245, 196, 81, 0.5); }
+    50% { text-shadow: 0 0 10px rgba(245, 196, 81, 0.95); }
+}
+#premium-btn.premium-active i {
+    animation: premiumCrownGlow 2.4s ease-in-out infinite;
+}
+/* Eye-catching gold flash shown briefly after a new game starts, to draw
+   a non-subscriber's attention to the Premium button so they notice it's
+   there to try. Distinct from premiumCrownGlow above (which is the calm,
+   permanent glow for players who already subscribed) — this one is
+   faster and stronger, and JS removes the class after ~10s so it never
+   runs indefinitely. */
+@keyframes premiumAttentionFlash {
+    0%, 100% {
+        color: #d1971e;
+        text-shadow: none;
+        transform: scale(1);
+    }
+    50% {
+        color: #ffd700;
+        text-shadow: 0 0 12px rgba(255, 215, 0, 0.95), 0 0 22px rgba(255, 215, 0, 0.6);
+        transform: scale(1.18);
+    }
+}
+#premium-btn.premium-attention-flash i {
+    animation: premiumAttentionFlash 0.9s ease-in-out infinite;
+}
+@keyframes premiumAttentionPulseBg {
+    0%, 100% { box-shadow: none; }
+    50% { box-shadow: 0 0 14px 4px rgba(255, 215, 0, 0.55); border-radius: 50%; }
+}
+#premium-btn.premium-attention-flash {
+    animation: premiumAttentionPulseBg 0.9s ease-in-out infinite;
+}
+/* Days-left badge on the crown button — reuses the .feature-count circle
+   but in the gold Premium color instead of the default blue, so it reads
+   as "part of Premium" rather than a regular feature counter. */
+.premium-days-badge {
+    background: linear-gradient(145deg, #f5c451, #d1971e) !important;
+    color: #4a2a00 !important;
+    font-weight: 700;
+    cursor: help;
+}
+.premium-days-badge-warning {
+    background: linear-gradient(145deg, #ff8a5c, #e0522b) !important;
+    color: #fff !important;
+}
+
+/* ===== Pi Premium subscription modal ===== */
+.premium-modal-content {
+    text-align: center;
+    margin-top: 3vh;
+    /* Reserve real space at the bottom for the phone's own on-screen
+       nav bar (gesture bar / back-home-recents), not just plain vh —
+       env(safe-area-inset-bottom) is 0 on devices without one, so this
+       is a no-op there and only kicks in where it's actually needed. */
+    margin-bottom: max(3vh, env(safe-area-inset-bottom, 0px));
+    max-height: min(90vh, calc(94vh - env(safe-area-inset-bottom, 0px)));
+    overflow-y: auto;
+}
+.premium-crown-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #f5c451, #d1971e);
+    color: #fff;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 6px auto 12px;
+    box-shadow: 0 4px 10px rgba(209, 151, 30, 0.45);
+}
+.premium-modal-desc {
+    color: #555;
+    font-size: 14px;
+    margin: 0 auto 6px;
+    max-width: 360px;
+}
+.premium-plans {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: 14px;
+    margin: 18px 0 10px;
+    flex-wrap: wrap;
+}
+.premium-plan-card {
+    position: relative;
+    flex: 1 1 140px;
+    max-width: 175px;
+    background: #faf8ff;
+    border: 2px solid #e4dbf7;
+    border-radius: 14px;
+    padding: 20px 12px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.premium-plan-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 18px rgba(91, 44, 153, 0.18);
+    border-color: #c9b6f0;
+}
+.premium-plan-card:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+.premium-plan-name {
+    font-weight: 700;
+    color: #4a2a7a;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+.premium-plan-price {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 19px;
+    font-weight: 800;
+    color: #5b2c99;
+    margin-top: 6px;
+}
+.premium-plan-price .pi-coin-icon-small {
+    background: linear-gradient(145deg, #8247e5, #5b2c99);
+    color: #fff;
+}
+.premium-plan-sub {
+    font-size: 12px;
+    color: #9086a3;
+    margin-top: 2px;
+}
+.premium-plan-best {
+    border-color: #f5c451;
+    background: linear-gradient(180deg, #fffaf0 0%, #fdf3dc 100%);
+    box-shadow: 0 4px 16px rgba(245, 196, 81, 0.35);
+}
+.premium-plan-best:hover {
+    box-shadow: 0 10px 24px rgba(245, 196, 81, 0.5);
+    border-color: #f5c451;
+}
+.premium-best-badge {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(145deg, #f5c451, #d1971e);
+    color: #4a2a00;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 20px;
+    box-shadow: 0 2px 6px rgba(209, 151, 30, 0.45);
+    white-space: nowrap;
+}
+.premium-plan-savings {
+    margin-top: 8px;
+    font-size: 11px;
+    line-height: 1.3;
+    font-weight: 800;
+    color: #96650a;
+    background: rgba(245, 196, 81, 0.25);
+    padding: 4px 9px;
+    border-radius: 10px;
+    text-align: center;
+}
+.premium-status {
+    font-size: 13px;
+    color: #5b2c99;
+    font-weight: 700;
+    min-height: 18px;
+    line-height: 1.35;
+    margin: 4px 0 0;
+}
+.premium-status.premium-status-expired {
+    color: #d1491e;
+}
+.premium-fineprint {
+    font-size: 12px;
+    color: #6b5a8c;
+    margin: 8px auto 0;
+    max-width: 320px;
 }
 
 
