@@ -235,7 +235,7 @@ body {
     transition: var(--transition);
 }
 /* Once a previously-locked item is purchased/unlocked, renderLockState()
-   in script.js swaps this badge's icon from a closed padlock (fa-lock-keyhole) to
+   in script.js swaps this badge's icon from a locked key (fa-key) to
    an open one (fa-unlock-keyhole) and adds .unlocked-badge, instead of just
    removing the .locked class from the card and leaving the closed-lock
    icon showing. Green ties it visually to "purchased" the same way the
