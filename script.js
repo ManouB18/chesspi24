@@ -630,7 +630,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const icon = badge.querySelector('i');
         badge.classList.toggle('unlocked-badge', unlocked);
         if (icon) {
-            icon.classList.toggle('fa-lock-keyhole', !unlocked);
+            icon.classList.toggle('fa-key', !unlocked);
             icon.classList.toggle('fa-unlock-keyhole', unlocked);
         }
     }
@@ -5389,14 +5389,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // category — Brown/Neo/Aggressive Attacker — never gets a badge at
     // all, matching how the theme/pieceset/bot selection pages never show
     // a lock-overlay on their free default card either). For everything
-    // else: closed grey keyhole lock while locked, open GREEN keyhole lock once
+    // else: grey key icon while locked, open GREEN keyhole lock once
     // purchased/unlocked — same visual language as setCardLockState() uses
     // on the selection pages, so "purchased" reads the same way everywhere
     // in the app instead of just silently losing its badge here.
     function buildSwatchLockBadge(unlocked) {
         const badge = document.createElement('div');
         badge.className = 'swatch-lock-badge' + (unlocked ? ' unlocked-badge' : '');
-        badge.innerHTML = `<i class="fas ${unlocked ? 'fa-unlock-keyhole' : 'fa-lock-keyhole'}"></i>`;
+        badge.innerHTML = `<i class="fas ${unlocked ? 'fa-unlock-keyhole' : 'fa-key'}"></i>`;
         return badge;
     }
 
