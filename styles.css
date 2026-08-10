@@ -235,8 +235,8 @@ body {
     transition: var(--transition);
 }
 /* Once a previously-locked item is purchased/unlocked, renderLockState()
-   in script.js swaps this badge's icon from a locked key (fa-key) to
-   an open one (fa-unlock-keyhole) and adds .unlocked-badge, instead of just
+   in script.js swaps this badge's icon from a closed padlock (fa-lock) to
+   an open one (fa-lock-open) and adds .unlocked-badge, instead of just
    removing the .locked class from the card and leaving the closed-lock
    icon showing. Green ties it visually to "purchased" the same way the
    rest of the UI uses green for success/confirmation. */
@@ -1617,6 +1617,163 @@ html.device-tablet .feature-count {
         margin: 10% auto;
         padding: 15px;
     }
+}
+
+/* Puzzle Mode */
+.puzzle-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+.puzzle-body .chessboard {
+    width: 100%;
+    max-width: 420px;
+}
+.puzzle-rating-badge {
+    font-size: 0.85rem;
+    font-weight: normal;
+    color: #888;
+    margin-left: 8px;
+}
+.puzzle-feedback {
+    min-height: 1.4em;
+    font-weight: 600;
+    text-align: center;
+    color: #444;
+}
+.puzzle-feedback.correct {
+    color: #2e7d32;
+}
+.puzzle-feedback.wrong {
+    color: #c62828;
+}
+.square.legal-move::after {
+    content: "";
+    position: absolute;
+    width: 28%;
+    height: 28%;
+    border-radius: 50%;
+    background-color: rgba(0, 0, 0, 0.18);
+    pointer-events: none;
+}
+
+/* Mode Select page */
+.mode-select-page .options-container {
+    flex-direction: column;
+    gap: 16px;
+}
+.option-card.mode-card {
+    width: 260px;
+    padding: 24px 20px;
+}
+.option-card.mode-card .option-icon {
+    font-size: 2.2rem;
+    margin-bottom: 10px;
+    display: block;
+}
+.option-card.mode-card .option-name {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+.option-card.mode-card .option-desc {
+    font-size: 0.85rem;
+    color: #888;
+    margin-top: 4px;
+}
+
+/* Puzzles page (own top-level page now, not a modal) */
+.puzzles-page-header {
+    margin-bottom: 10px;
+}
+.puzzle-back-btn {
+    margin-top: 16px;
+}
+.puzzle-stats-row {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    align-items: center;
+    margin-top: 4px;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+.puzzle-points-display {
+    color: #b8860b;
+}
+.puzzle-mate-counter {
+    display: inline-flex;
+    background: #c0392b;
+    color: white;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+}
+.puzzle-endgame-tip {
+    max-width: 420px;
+    text-align: center;
+    font-size: 0.85rem;
+    color: #666;
+    background: #fdf6e3;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-top: 6px;
+}
+.puzzle-actions-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+.puzzle-hint-btn {
+    background: #f0ad4e;
+}
+
+/* Puzzle board: intentionally larger than the bot board, and forced to
+   the classic brown palette regardless of whichever theme the player
+   picked for the bot game — the two boards don't share a page, so there
+   is no reason for a puzzle board to be pink or blue. */
+#puzzle-chessboard, #rush-chessboard {
+    --light-square-bg: #f0d9b5;
+    --dark-square-bg: #b58863;
+}
+.puzzle-chessboard-large {
+    width: 98vmin;
+    max-width: 720px;
+    max-height: 640px;
+}
+
+/* Puzzle type / difficulty selection pages */
+.puzzle-type-card .option-icon,
+.puzzle-difficulty-card .option-icon {
+    font-size: 1.8rem;
+}
+
+/* Puzzle Rush */
+.rush-mode-select {
+    flex-direction: column;
+    gap: 14px;
+}
+.rush-stats-row {
+    gap: 22px;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+.rush-stat i {
+    margin-right: 4px;
+}
+#rush-mistakes-display i {
+    color: #c0392b;
+}
+.rush-results {
+    text-align: center;
+    max-width: 420px;
+}
+.rush-results h3 {
+    margin-bottom: 8px;
+}
+.rush-best-line {
+    font-weight: 600;
+    margin: 10px 0;
 }
 /* Promotion Modal Styles */
 .promotion-options {
