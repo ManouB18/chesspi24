@@ -352,14 +352,14 @@ document.addEventListener('DOMContentLoaded', function() {
         aggressive: {
             id: 'aggressive',
             name: 'Aggressive Attacker',
-            icon: 'fa-fire-flame-curved',
+            icon: 'fa-fire',
             desc: 'Sacrifices material for open lines and relentless attacks on your king.',
             free: true
         },
         defensive: {
             id: 'defensive',
             name: 'Solid Defender',
-            icon: 'fa-shield',
+            icon: 'fa-shield-halved',
             desc: 'Locks up the position, keeps the king safe, and waits for you to overextend.',
             free: false
         },
@@ -373,7 +373,7 @@ document.addEventListener('DOMContentLoaded', function() {
         trickster: {
             id: 'trickster',
             name: 'Gambit Trickster',
-            icon: 'fa-mask',
+            icon: 'fa-hat-wizard',
             desc: 'Opens with sharp gambits and early traps to throw your preparation off balance.',
             free: false
         }
@@ -630,8 +630,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const icon = badge.querySelector('i');
         badge.classList.toggle('unlocked-badge', unlocked);
         if (icon) {
-            icon.classList.toggle('fa-key', !unlocked);
-            icon.classList.toggle('fa-unlock-keyhole', unlocked);
+            icon.classList.toggle('fa-lock', !unlocked);
+            icon.classList.toggle('fa-lock-open', unlocked);
         }
     }
 
@@ -651,6 +651,18 @@ document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.option-card[data-bot-personality]').forEach((card) => {
             const personality = card.getAttribute('data-bot-personality');
             setCardLockState(card, isBotPersonalityUnlocked(personality));
+        });
+        // Puzzle type/difficulty cards: Premium-subscription-only gating,
+        // no per-item purchase and no free trial (see the PUZZLE MODE
+        // section below) — isPuzzleTypeUnlocked()/isPuzzleDifficultyUnlocked()
+        // just check meta.free || isPremiumActive().
+        document.querySelectorAll('.option-card[data-puzzle-type]').forEach((card) => {
+            const type = card.getAttribute('data-puzzle-type');
+            setCardLockState(card, isPuzzleTypeUnlocked(type));
+        });
+        document.querySelectorAll('.option-card[data-puzzle-difficulty]').forEach((card) => {
+            const diff = card.getAttribute('data-puzzle-difficulty');
+            setCardLockState(card, isPuzzleDifficultyUnlocked(diff));
         });
 
         // Safety net: if the currently-selected difficulty somehow isn't
@@ -1328,7 +1340,7 @@ document.addEventListener('DOMContentLoaded', function() {
             updateCurrentSettings();
             applyTheme(userSettings.theme);
             setTimeout(() => {
-                switchPage(2);
+                switchPage(3);
             }, 500);
         });
     });
@@ -1364,7 +1376,7 @@ document.addEventListener('DOMContentLoaded', function() {
             updateCurrentSettings();
             updateBoard(); // live-preview the new piece set immediately
             setTimeout(() => {
-                switchPage(3);
+                switchPage(4);
             }, 500);
         });
     });
@@ -1401,7 +1413,7 @@ document.addEventListener('DOMContentLoaded', function() {
             userSettings.botPersonality = clickedBot;
             updateCurrentSettings();
             setTimeout(() => {
-                switchPage(4);
+                switchPage(5);
             }, 500);
         });
     });
@@ -1450,7 +1462,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             setTimeout(() => {
-                switchPage(5);
+                switchPage(6);
             }, 500);
         });
     });
@@ -2323,8 +2335,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateMuteIcon() {
         const muteIcon = document.getElementById('mute-icon');
         if (!muteIcon) return;
-        muteIcon.classList.remove('fa-volume-high', 'fa-volume-xmark');
-        muteIcon.classList.add(isMuted ? 'fa-volume-xmark' : 'fa-volume-high');
+        muteIcon.classList.remove('fa-volume-up', 'fa-volume-mute');
+        muteIcon.classList.add(isMuted ? 'fa-volume-mute' : 'fa-volume-up');
     }
 
     // Setup mute button
@@ -3549,32 +3561,46 @@ document.addEventListener('DOMContentLoaded', function() {
         updateNavArrows(pageIndex);
         currentPage = pageIndex;
        
-        // Page order: 0=welcome, 1=theme, 2=pieceset, 3=bot personality,
-        // 4=difficulty, 5=game. The game page is now index 5 (it used to
-        // be 4, before the bot-personality page was inserted at index 3).
-        if (pageIndex === 5) {
+        // Page order: 0=welcome, 1=mode-select, 2=theme, 3=pieceset,
+        // 4=bot personality, 5=difficulty, 6=game, 7=puzzle-type,
+        // 8=puzzle-difficulty, 9=puzzles, 10=puzzle-rush.
+        if (pageIndex !== 6 && gameTimer) {
+            // Stop the bot-game timer whenever we leave the game page —
+            // including going straight to puzzles, so a live timed game
+            // never keeps ticking down in the background while the player
+            // is doing something else entirely.
+            clearInterval(gameTimer);
+        }
+        if (pageIndex === 6) {
             initNewGame();
             updateCurrentSettings();
             updateFeatureButtonsState();
-        } else {
-            // Stop timer if leaving game page
-            if (gameTimer) {
-                clearInterval(gameTimer);
-            }
+        } else if (pageIndex === 9) {
+            startNextPuzzle();
+        } else if (pageIndex === 10) {
+            resetRushUI();
+        } else if (pageIndex !== 9 && rushState.active) {
+            // Leaving mid-rush any other way than finishing it normally —
+            // stop its timer so it doesn't keep running invisibly.
+            stopRushRun();
         }
     }
    
     // Function to update navigation arrows visibility
     function updateNavArrows(pageIndex) {
         if (!leftArrow || !rightArrow) return;
-        if (pageIndex === 0 || pageIndex === 5) {
+        // Arrows only make sense while swiping between the 4 linear setup
+        // steps (theme/pieceset/bot/difficulty) — welcome, mode-select,
+        // game, and puzzles are all destinations you arrive at directly,
+        // not steps you swipe through.
+        if (pageIndex === 0 || pageIndex === 1 || pageIndex >= 6) {
             leftArrow.classList.add('hidden');
             rightArrow.classList.add('hidden');
         } else {
             leftArrow.classList.remove('hidden');
             rightArrow.classList.remove('hidden');
-            leftArrow.classList.toggle('hidden', pageIndex === 1);
-            rightArrow.classList.toggle('hidden', pageIndex === 4);
+            leftArrow.classList.toggle('hidden', pageIndex === 2);
+            rightArrow.classList.toggle('hidden', pageIndex === 5);
         }
     }
    
@@ -5389,14 +5415,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // category — Brown/Neo/Aggressive Attacker — never gets a badge at
     // all, matching how the theme/pieceset/bot selection pages never show
     // a lock-overlay on their free default card either). For everything
-    // else: grey key icon while locked, open GREEN keyhole lock once
+    // else: closed grey padlock while locked, open GREEN padlock once
     // purchased/unlocked — same visual language as setCardLockState() uses
     // on the selection pages, so "purchased" reads the same way everywhere
     // in the app instead of just silently losing its badge here.
     function buildSwatchLockBadge(unlocked) {
         const badge = document.createElement('div');
         badge.className = 'swatch-lock-badge' + (unlocked ? ' unlocked-badge' : '');
-        badge.innerHTML = `<i class="fas ${unlocked ? 'fa-unlock-keyhole' : 'fa-key'}"></i>`;
+        badge.innerHTML = `<i class="fas ${unlocked ? 'fa-lock-open' : 'fa-lock'}"></i>`;
         return badge;
     }
 
@@ -5813,7 +5839,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const settingsBtnEl = document.getElementById('settings-btn');
     if (settingsBtnEl) {
         settingsBtnEl.addEventListener('click', function() {
-            switchPage(1);
+            switchPage(2);
             const gameOverModal = document.getElementById('game-over-modal');
             if (gameOverModal) gameOverModal.style.display = 'none';
         });
@@ -6219,14 +6245,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (entry.isVip) {
                     const vipBadge = document.createElement('span');
                     vipBadge.className = 'leaderboard-vip-badge';
-                    vipBadge.innerHTML = '<i class="fas fa-star"></i>';
+                    vipBadge.innerHTML = '<i class="fas fa-crown"></i>';
                     vipBadge.title = (typeof i18next !== 'undefined' && i18next.t) ? i18next.t('vipBadgeTooltip') : 'Pi VIP — Premium subscriber or has purchased premium content';
                     name.appendChild(vipBadge);
                 }
 
                 const stats = document.createElement('div');
                 stats.className = 'leaderboard-stats';
-                stats.innerHTML = `<span class="leaderboard-wins"><i class="fas fa-award"></i> ${wins} wins</span><span class="leaderboard-dot">•</span><span class="leaderboard-played">${played} played</span><span class="leaderboard-dot">•</span><span class="leaderboard-winrate-inline">${winRate}%</span>`;
+                stats.innerHTML = `<span class="leaderboard-wins"><i class="fas fa-trophy"></i> ${wins} wins</span><span class="leaderboard-dot">•</span><span class="leaderboard-played">${played} played</span><span class="leaderboard-dot">•</span><span class="leaderboard-winrate-inline">${winRate}%</span>`;
 
                 info.appendChild(name);
                 info.appendChild(stats);
@@ -6334,5 +6360,693 @@ document.addEventListener('DOMContentLoaded', function() {
                 showCustomAlert("Statistics have been reset successfully!");
             }
         });
+    }
+
+    // ============================================================
+    // PUZZLE MODE
+    // ------------------------------------------------------------
+    // Deliberately built as a self-contained module with its own board(s)
+    // (#puzzle-chessboard / #rush-chessboard), its own Chess.js instance
+    // (puzzleState.chess) and its own click handler — it does NOT touch
+    // `game`, `chessboard`, or handleSquareClick(). Those already carry a
+    // lot of state (bot AI, timer, hints) and reusing them here would
+    // risk destabilizing the main game loop for a feature that doesn't
+    // need any of that. It DOES reuse createPieceElement()/the
+    // .square/.piece CSS classes so puzzles look identical to the main
+    // board for free, and it reuses showPremiumModal()/isPremiumActive()/
+    // setCardLockState()/renderLockState() for gating, so Premium behaves
+    // and looks identical everywhere else in the app.
+    //
+    // Puzzle data/format follows the Lichess Puzzle Database (CC0
+    // licensed: https://database.lichess.org/#puzzles) exactly:
+    //   FEN    = position BEFORE the opponent's setup move.
+    //   moves  = UCI move list. moves[0] is that opponent setup move
+    //            (played automatically); moves[1] is the first move the
+    //            PLAYER must find; moves then alternate opponent/player.
+    // This means a puzzles.json generated straight from the official
+    // lichess_db_puzzle.csv (see tools/build-puzzles.py) drops in with
+    // zero conversion.
+    //
+    // GATING MODEL: unlike themes/piece sets/bot personalities/difficulty
+    // levels (which support per-item Pi purchases AND a one-time free
+    // trial), puzzle TYPE and puzzle DIFFICULTY are gated purely on
+    // Premium subscription status — one card (Tactical) and one
+    // difficulty (Easy) are free forever, everything else requires an
+    // active subscription, with no per-item purchase and no free trial.
+    // That's a deliberate scope decision (see the chat write-up), not an
+    // oversight — flag it back if per-item puzzle purchases turn out to
+    // be wanted after all.
+
+    // ---- Category / difficulty classification (derived from Lichess
+    // theme tags already present in puzzles.json, so the data file itself
+    // never needs a "category" column) ----
+    const PUZZLE_TYPE_META = {
+        tactical: { free: true },
+        rush:     { free: false },
+        mateInX:  { free: false },
+        endgame:  { free: false }
+    };
+    const PUZZLE_DIFFICULTY_META = {
+        easy:   { free: true },
+        medium: { free: false },
+        hard:   { free: false },
+        expert: { free: false }
+    };
+    const DIFFICULTY_POINTS = { easy: 5, medium: 10, hard: 15, expert: 20 };
+
+    function isPuzzleTypeUnlocked(type) {
+        const meta = PUZZLE_TYPE_META[type];
+        return !!meta && (meta.free || isPremiumActive());
+    }
+    function isPuzzleDifficultyUnlocked(diff) {
+        const meta = PUZZLE_DIFFICULTY_META[diff];
+        return !!meta && (meta.free || isPremiumActive());
+    }
+    function getPuzzleCategory(p) {
+        const themes = p.themes || [];
+        if (themes.indexOf('mate') !== -1) return 'mateInX';
+        if (themes.indexOf('endgame') !== -1) return 'endgame';
+        return 'tactical';
+    }
+    function getPuzzleDifficultyBucket(p) {
+        const r = p.rating || 1200;
+        if (r < 1200) return 'easy';
+        if (r < 1600) return 'medium';
+        if (r < 2000) return 'hard';
+        return 'expert';
+    }
+    function getMateInCount(p) {
+        const themes = p.themes || [];
+        for (let i = 0; i < themes.length; i++) {
+            const m = /^mateIn(\d+)$/.exec(themes[i]);
+            if (m) return parseInt(m[1], 10);
+        }
+        // Fallback if the theme tag is missing: every other move starting
+        // at index 1 is the player's, so that's the mate-in count.
+        return Math.max(1, Math.ceil((p.moves.length - 1) / 2));
+    }
+    const ENDGAME_TIPS = {
+        promotion: "Push your pawn toward promotion — every tempo counts.",
+        advancedPawn: "Push your pawn toward promotion — every tempo counts.",
+        zugzwang: "Look for a quiet move that puts your opponent in zugzwang — any move they make weakens their position.",
+        fortress: "Look for a defensive setup your opponent can't break through.",
+        defensiveMove: "Look for a defensive setup your opponent can't break through.",
+        rookEndgame: "Activate your rook and cut off the enemy king.",
+        pawnEndgame: "Count the tempo carefully — king position decides pawn races.",
+        queenEndgame: "Watch for perpetual check or a favorable queen trade.",
+        knightEndgame: "Centralize your knight and target weak pawns.",
+        bishopEndgame: "Use your bishop's long diagonal to control key squares."
+    };
+    function getEndgameTip(p) {
+        const themes = p.themes || [];
+        for (let i = 0; i < themes.length; i++) {
+            if (ENDGAME_TIPS[themes[i]]) return ENDGAME_TIPS[themes[i]];
+        }
+        return "Look for the most forcing continuation — checks, captures, and threats first.";
+    }
+
+    // ---- Points (a simple cumulative score, not a true Elo/Glicko
+    // rating — awarding an actual skill rating would need real
+    // opponent-strength comparisons, which a static puzzle set can't do
+    // honestly) ----
+    function getPuzzlePoints() {
+        let pts = 0;
+        try { pts = parseInt(localStorage.getItem('chessPiPuzzlePoints') || '0', 10) || 0; } catch (e) {}
+        return pts;
+    }
+    function addPuzzlePoints(n) {
+        const pts = getPuzzlePoints() + n;
+        try { localStorage.setItem('chessPiPuzzlePoints', String(pts)); } catch (e) {}
+        const el = document.getElementById('puzzle-points');
+        if (el) el.textContent = pts;
+        return pts;
+    }
+
+    let puzzleState = {
+        allPuzzles: null,       // loaded once from puzzles.json
+        current: null,          // the puzzle object currently loaded
+        chess: null,            // Chess.js instance for the puzzle board
+        playerColor: 'w',
+        moveIndex: 0,           // index into current.moves for the NEXT move
+        solved: false,
+        selectedType: 'tactical',
+        selectedDifficulty: 'easy',
+        category: 'tactical',
+        mode: 'normal',         // 'normal' | 'rush'
+        boardId: 'puzzle-chessboard',
+        feedbackId: 'puzzle-feedback',
+        mateRemaining: 0,
+        endgameTipText: ''
+    };
+
+    function getPuzzleStats() {
+        const today = new Date().toISOString().slice(0, 10);
+        let stats;
+        try {
+            stats = JSON.parse(localStorage.getItem('chessPiPuzzleStats') || 'null');
+        } catch (e) {
+            stats = null;
+        }
+        if (!stats || stats.date !== today) {
+            stats = { date: today, solvedToday: 0, totalSolved: stats ? (stats.totalSolved || 0) : 0, solvedIds: [] };
+        }
+        if (!Array.isArray(stats.solvedIds)) stats.solvedIds = [];
+        return stats;
+    }
+    function savePuzzleStats(stats) {
+        try {
+            localStorage.setItem('chessPiPuzzleStats', JSON.stringify(stats));
+        } catch (e) {
+            console.error('savePuzzleStats failed:', e);
+        }
+    }
+
+    async function loadPuzzlesData() {
+        if (puzzleState.allPuzzles) return puzzleState.allPuzzles;
+        try {
+            const res = await fetch('puzzles.json');
+            if (!res.ok) throw new Error('puzzles.json HTTP ' + res.status);
+            puzzleState.allPuzzles = await res.json();
+        } catch (err) {
+            console.error('Failed to load puzzles.json:', err);
+            puzzleState.allPuzzles = [];
+        }
+        return puzzleState.allPuzzles;
+    }
+
+    // Picks the next puzzle matching the selected type + difficulty
+    // (already gated at card-click time — see the type/difficulty click
+    // handlers below — so no premium re-check needed here), preferring
+    // ones not already solved. Falls back to relaxing difficulty, then
+    // type, rather than showing nothing if a combination is thin in the
+    // seed dataset.
+    async function pickNextPuzzle() {
+        const all = await loadPuzzlesData();
+        if (!all.length) return null;
+        const type = puzzleState.selectedType || 'tactical';
+        const diff = puzzleState.selectedDifficulty || 'easy';
+        const matchesType = (p) => (type === 'rush' || getPuzzleCategory(p) === type);
+
+        let pool = all.filter(p => matchesType(p) && getPuzzleDifficultyBucket(p) === diff);
+        if (!pool.length) pool = all.filter(matchesType);
+        if (!pool.length) pool = all;
+
+        const stats = getPuzzleStats();
+        const unsolved = pool.filter(p => !stats.solvedIds.includes(p.id));
+        const chooseFrom = unsolved.length ? unsolved : pool;
+        return chooseFrom[Math.floor(Math.random() * chooseFrom.length)];
+    }
+
+    function createPuzzleBoard() {
+        const boardId = puzzleState.boardId || 'puzzle-chessboard';
+        const board = document.getElementById(boardId);
+        if (!board) return;
+        board.innerHTML = '';
+        const flip = puzzleState.playerColor === 'b';
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const row = flip ? 7 - r : r;
+                const col = flip ? 7 - c : c;
+                const square = document.createElement('div');
+                square.classList.add('square');
+                square.classList.add((row + col) % 2 === 0 ? 'white' : 'black');
+                square.dataset.row = row;
+                square.dataset.col = col;
+                square.tabIndex = 0;
+                square.setAttribute('role', 'button');
+                square.addEventListener('click', () => handlePuzzleSquareClick(row, col));
+                square.addEventListener('keydown', (e) => { if (e.key === 'Enter') handlePuzzleSquareClick(row, col); });
+                board.appendChild(square);
+            }
+        }
+    }
+
+    let puzzleSelectedSquare = null;
+
+    function updatePuzzleBoard() {
+        const boardId = puzzleState.boardId || 'puzzle-chessboard';
+        const currentPieceSet = ['neo', 'wood', 'glass', 'marble'].includes(userSettings.pieceSet) ? userSettings.pieceSet : 'neo';
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const squareName = String.fromCharCode(97 + col) + (8 - row);
+                const piece = puzzleState.chess.get(squareName);
+                const squareEl = document.querySelector(`#${boardId} .square[data-row="${row}"][data-col="${col}"]`);
+                if (!squareEl) continue;
+                squareEl.innerHTML = '';
+                squareEl.classList.remove('selected', 'legal-move', 'hint-from', 'hint-to');
+                if (piece) squareEl.appendChild(createPieceElement(piece.type, piece.color, currentPieceSet));
+            }
+        }
+    }
+
+    function clearPuzzleSelection() {
+        const boardId = puzzleState.boardId || 'puzzle-chessboard';
+        puzzleSelectedSquare = null;
+        document.querySelectorAll(`#${boardId} .square`).forEach(sq => sq.classList.remove('selected', 'legal-move'));
+    }
+
+    function handlePuzzleSquareClick(row, col) {
+        if (!puzzleState.current || puzzleState.solved) return;
+        const squareName = String.fromCharCode(97 + col) + (8 - row);
+        const piece = puzzleState.chess.get(squareName);
+
+        if (puzzleSelectedSquare) {
+            const from = puzzleSelectedSquare;
+            if (from === squareName) { clearPuzzleSelection(); return; }
+            const attempt = { from, to: squareName, promotion: 'q' };
+            const legal = puzzleState.chess.moves({ square: from, verbose: true })
+                .some(m => m.to === squareName);
+            clearPuzzleSelection();
+            if (!legal) {
+                // Might just be selecting a different one of the player's own pieces.
+                if (piece && piece.color === puzzleState.chess.turn()) {
+                    selectPuzzleSquare(squareName);
+                }
+                return;
+            }
+            attemptPuzzleMove(attempt);
+            return;
+        }
+
+        if (piece && piece.color === puzzleState.chess.turn()) {
+            selectPuzzleSquare(squareName);
+        }
+    }
+
+    function selectPuzzleSquare(squareName) {
+        const boardId = puzzleState.boardId || 'puzzle-chessboard';
+        puzzleSelectedSquare = squareName;
+        const col = squareName.charCodeAt(0) - 97;
+        const row = 8 - parseInt(squareName[1]);
+        const squareEl = document.querySelector(`#${boardId} .square[data-row="${row}"][data-col="${col}"]`);
+        if (squareEl) squareEl.classList.add('selected');
+        puzzleState.chess.moves({ square: squareName, verbose: true }).forEach(m => {
+            const tCol = m.to.charCodeAt(0) - 97;
+            const tRow = 8 - parseInt(m.to[1]);
+            const tEl = document.querySelector(`#${boardId} .square[data-row="${tRow}"][data-col="${tCol}"]`);
+            if (tEl) tEl.classList.add('legal-move');
+        });
+    }
+
+    // Highlights the correct next move's origin/target squares (reusing
+    // the same .hint-from/.hint-to styling the bot game's own Hint
+    // feature uses) rather than auto-playing it — the player still has to
+    // make the move themselves. For Endgame puzzles specifically, also
+    // reveals a short plain-language tip about the general idea, per the
+    // "hints that explain the general endgame idea if the player gets
+    // stuck" requirement.
+    function providePuzzleHint() {
+        if (!puzzleState.current || puzzleState.solved) return;
+        const boardId = puzzleState.boardId || 'puzzle-chessboard';
+        document.querySelectorAll(`#${boardId} .square`).forEach(sq => sq.classList.remove('hint-from', 'hint-to'));
+        const uci = puzzleState.current.moves[puzzleState.moveIndex];
+        if (!uci) return;
+        const from = uci.slice(0, 2), to = uci.slice(2, 4);
+        const highlight = (sq, cls) => {
+            const col = sq.charCodeAt(0) - 97;
+            const row = 8 - parseInt(sq[1]);
+            const el = document.querySelector(`#${boardId} .square[data-row="${row}"][data-col="${col}"]`);
+            if (el) el.classList.add(cls);
+        };
+        highlight(from, 'hint-from');
+        highlight(to, 'hint-to');
+
+        if (puzzleState.category === 'endgame') {
+            const tipEl = document.getElementById('puzzle-endgame-tip');
+            if (tipEl) {
+                tipEl.textContent = puzzleState.endgameTipText || getEndgameTip(puzzleState.current);
+                tipEl.style.display = 'block';
+            }
+        }
+    }
+
+    // Decrements the "Mate in N" badge — called once per correct PLAYER
+    // move only (not the opponent's automatic replies), since the count
+    // tracks moves remaining for the player to deliver mate.
+    function updateMateCounter() {
+        if (puzzleState.mode === 'rush' || puzzleState.category !== 'mateInX') return;
+        puzzleState.mateRemaining = Math.max(0, (puzzleState.mateRemaining || 1) - 1);
+        const el = document.getElementById('puzzle-mate-counter');
+        if (el) el.textContent = puzzleState.mateRemaining > 0 ? `Mate in ${puzzleState.mateRemaining}` : 'Mate!';
+    }
+
+    function attemptPuzzleMove(attempt) {
+        const expectedUci = puzzleState.current.moves[puzzleState.moveIndex];
+        const playedUci = attempt.from + attempt.to + (attempt.promotion && isPuzzlePromotion(attempt) ? attempt.promotion : '');
+        const expectedNoPromo = expectedUci.slice(0, 4);
+        const playedNoPromo = playedUci.slice(0, 4);
+        const feedbackEl = document.getElementById(puzzleState.feedbackId || 'puzzle-feedback');
+
+        if (playedNoPromo !== expectedNoPromo) {
+            if (!isMuted && sounds['illegal']) sounds['illegal'].play();
+            if (puzzleState.mode === 'rush') {
+                rushState.mistakes++;
+                if (feedbackEl) { feedbackEl.textContent = 'Wrong — next puzzle.'; feedbackEl.className = 'puzzle-feedback wrong'; }
+                if (rushState.mode === 'survival') {
+                    const livesEl = document.getElementById('rush-mistakes-left');
+                    if (livesEl) livesEl.textContent = String(Math.max(0, 3 - rushState.mistakes));
+                    if (rushState.mistakes >= 3) {
+                        setTimeout(endRushRun, 600);
+                        return;
+                    }
+                }
+                setTimeout(loadNextRushPuzzle, 600);
+            } else if (feedbackEl) {
+                feedbackEl.textContent = 'Not quite — try again.';
+                feedbackEl.className = 'puzzle-feedback wrong';
+            }
+            return;
+        }
+
+        // Correct — apply it for real (with promotion piece from the puzzle data if any).
+        const promo = expectedUci.length > 4 ? expectedUci[4] : undefined;
+        puzzleState.chess.move({ from: attempt.from, to: attempt.to, promotion: promo || 'q' });
+        updatePuzzleBoard();
+        if (!isMuted && sounds['move-self']) sounds['move-self'].play();
+        puzzleState.moveIndex++;
+        updateMateCounter();
+        maybeAdvancePuzzle();
+    }
+
+    function isPuzzlePromotion(attempt) {
+        const piece = puzzleState.chess.get(attempt.from);
+        return piece && piece.type === 'p' && (attempt.to[1] === '8' || attempt.to[1] === '1');
+    }
+
+    function maybeAdvancePuzzle() {
+        const moves = puzzleState.current.moves;
+        const feedbackEl = document.getElementById(puzzleState.feedbackId || 'puzzle-feedback');
+        if (puzzleState.moveIndex >= moves.length) {
+            finishPuzzle(true);
+            return;
+        }
+        // Next move belongs to the opponent — play it automatically after a
+        // short beat so it reads as a reply, not an instant swap.
+        if (feedbackEl) { feedbackEl.textContent = 'Good move!'; feedbackEl.className = 'puzzle-feedback correct'; }
+        setTimeout(() => {
+            const uci = moves[puzzleState.moveIndex];
+            const from = uci.slice(0, 2), to = uci.slice(2, 4), promo = uci.length > 4 ? uci[4] : undefined;
+            puzzleState.chess.move({ from, to, promotion: promo || 'q' });
+            updatePuzzleBoard();
+            if (!isMuted && sounds['move-opponent']) sounds['move-opponent'].play();
+            puzzleState.moveIndex++;
+            if (puzzleState.moveIndex >= moves.length) {
+                finishPuzzle(true);
+            } else if (feedbackEl) {
+                feedbackEl.textContent = 'Your move.';
+                feedbackEl.className = 'puzzle-feedback';
+            }
+        }, 500);
+    }
+
+    function finishPuzzle(success) {
+        puzzleState.solved = success;
+        const feedbackEl = document.getElementById(puzzleState.feedbackId || 'puzzle-feedback');
+        if (success) {
+            if (feedbackEl) { feedbackEl.textContent = 'Puzzle solved! 🎉'; feedbackEl.className = 'puzzle-feedback correct'; }
+            if (!isMuted && sounds['game-win']) sounds['game-win'].play();
+            const stats = getPuzzleStats();
+            if (!stats.solvedIds.includes(puzzleState.current.id)) {
+                stats.solvedIds.push(puzzleState.current.id);
+                stats.solvedToday++;
+                stats.totalSolved++;
+                savePuzzleStats(stats);
+            }
+            const diffKey = puzzleState.selectedDifficulty || getPuzzleDifficultyBucket(puzzleState.current);
+            addPuzzlePoints(DIFFICULTY_POINTS[diffKey] || 5);
+
+            if (puzzleState.mode === 'rush') {
+                rushState.solved++;
+                const solvedEl = document.getElementById('rush-solved-count');
+                if (solvedEl) solvedEl.textContent = String(rushState.solved);
+                setTimeout(loadNextRushPuzzle, 500);
+                return; // rush mode advances automatically — no Next Puzzle button
+            }
+        }
+        const nextBtn = document.getElementById('puzzle-next-btn');
+        if (nextBtn) nextBtn.style.display = success ? 'inline-block' : 'none';
+    }
+
+    async function loadPuzzleIntoBoard(puzzle) {
+        puzzleState.current = puzzle;
+        puzzleState.chess = new Chess(puzzle.fen);
+        puzzleState.moveIndex = 0;
+        puzzleState.solved = false;
+        puzzleState.category = getPuzzleCategory(puzzle);
+        puzzleState.endgameTipText = getEndgameTip(puzzle);
+        // Player plays the side to move AFTER the opponent's automatic
+        // setup move (moves[0]) is applied — i.e. the opposite of whoever
+        // is to move in the raw FEN.
+        puzzleState.playerColor = puzzleState.chess.turn() === 'w' ? 'b' : 'w';
+        createPuzzleBoard();
+        updatePuzzleBoard();
+
+        const isRush = puzzleState.mode === 'rush';
+
+        const ratingEl = document.getElementById('puzzle-rating');
+        if (ratingEl && !isRush) ratingEl.textContent = puzzle.rating ? ('~' + puzzle.rating) : '';
+
+        const nextBtn = document.getElementById('puzzle-next-btn');
+        if (nextBtn) nextBtn.style.display = 'none';
+
+        const tipEl = document.getElementById('puzzle-endgame-tip');
+        if (tipEl) tipEl.style.display = 'none'; // only revealed via Hint
+
+        const mateCounterEl = document.getElementById('puzzle-mate-counter');
+        if (mateCounterEl) {
+            if (!isRush && puzzleState.category === 'mateInX') {
+                puzzleState.mateRemaining = getMateInCount(puzzle);
+                mateCounterEl.textContent = `Mate in ${puzzleState.mateRemaining}`;
+                mateCounterEl.style.display = 'inline-flex';
+            } else {
+                mateCounterEl.style.display = 'none';
+            }
+        }
+
+        const feedbackEl = document.getElementById(puzzleState.feedbackId || 'puzzle-feedback');
+        if (feedbackEl) {
+            feedbackEl.textContent = 'Find the best move for ' + (puzzleState.playerColor === 'w' ? 'White' : 'Black') + '.';
+            feedbackEl.className = 'puzzle-feedback';
+        }
+
+        // Apply the opponent's automatic setup move (moves[0]) after a
+        // short beat so the player sees the starting position first
+        // (snappier in Puzzle Rush, where speed matters).
+        setTimeout(() => {
+            const uci = puzzle.moves[0];
+            const from = uci.slice(0, 2), to = uci.slice(2, 4), promo = uci.length > 4 ? uci[4] : undefined;
+            puzzleState.chess.move({ from, to, promotion: promo || 'q' });
+            updatePuzzleBoard();
+            if (!isMuted && sounds['move-opponent']) sounds['move-opponent'].play();
+            puzzleState.moveIndex = 1;
+        }, isRush ? 150 : 400);
+    }
+
+    // Entry point for the standard (non-rush) puzzles page — type and
+    // difficulty were already chosen (and gated) on the two pages before
+    // this one.
+    async function startNextPuzzle() {
+        puzzleState.mode = 'normal';
+        puzzleState.boardId = 'puzzle-chessboard';
+        puzzleState.feedbackId = 'puzzle-feedback';
+        const pointsEl = document.getElementById('puzzle-points');
+        if (pointsEl) pointsEl.textContent = getPuzzlePoints();
+        const puzzle = await pickNextPuzzle();
+        if (!puzzle) {
+            const fb = document.getElementById('puzzle-feedback');
+            if (fb) { fb.textContent = 'No puzzles available right now.'; fb.className = 'puzzle-feedback'; }
+            return;
+        }
+        loadPuzzleIntoBoard(puzzle);
+    }
+
+    // ---- Puzzle Rush ----
+    // NOTE: "Today's Best" / "This Week's Best" below are tracked
+    // per-device in localStorage. There's no shared backend in this
+    // project, so a real cross-player leaderboard isn't wired up — the
+    // page says so explicitly rather than implying a competition that
+    // isn't really happening.
+    let rushState = {
+        active: false,
+        mode: null,       // 'time3' | 'time5' | 'survival'
+        solved: 0,
+        mistakes: 0,
+        timeLeftSec: 0,
+        timerInterval: null
+    };
+
+    function resetRushUI() {
+        const modeSelectEl = document.getElementById('rush-mode-select');
+        const playAreaEl = document.getElementById('rush-play-area');
+        const resultsEl = document.getElementById('rush-results');
+        if (modeSelectEl) modeSelectEl.style.display = 'flex';
+        if (playAreaEl) playAreaEl.style.display = 'none';
+        if (resultsEl) resultsEl.style.display = 'none';
+        stopRushRun();
+    }
+
+    function stopRushRun() {
+        if (rushState.timerInterval) clearInterval(rushState.timerInterval);
+        rushState.timerInterval = null;
+        rushState.active = false;
+    }
+
+    function updateRushTimerDisplay() {
+        const m = Math.floor(rushState.timeLeftSec / 60);
+        const s = rushState.timeLeftSec % 60;
+        const el = document.getElementById('rush-time-left');
+        if (el) el.textContent = `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    function startRushRun(mode) {
+        rushState.active = true;
+        rushState.mode = mode;
+        rushState.solved = 0;
+        rushState.mistakes = 0;
+        puzzleState.mode = 'rush';
+        puzzleState.boardId = 'rush-chessboard';
+        puzzleState.feedbackId = 'rush-feedback';
+
+        const modeSelectEl = document.getElementById('rush-mode-select');
+        const playAreaEl = document.getElementById('rush-play-area');
+        const resultsEl = document.getElementById('rush-results');
+        if (modeSelectEl) modeSelectEl.style.display = 'none';
+        if (resultsEl) resultsEl.style.display = 'none';
+        if (playAreaEl) playAreaEl.style.display = 'flex';
+        const solvedCountEl = document.getElementById('rush-solved-count');
+        if (solvedCountEl) solvedCountEl.textContent = '0';
+
+        const timerDisplay = document.getElementById('rush-timer-display');
+        const mistakesDisplay = document.getElementById('rush-mistakes-display');
+        if (mode === 'survival') {
+            if (timerDisplay) timerDisplay.style.display = 'none';
+            if (mistakesDisplay) mistakesDisplay.style.display = 'inline-flex';
+            const livesEl = document.getElementById('rush-mistakes-left');
+            if (livesEl) livesEl.textContent = '3';
+        } else {
+            if (timerDisplay) timerDisplay.style.display = 'inline-flex';
+            if (mistakesDisplay) mistakesDisplay.style.display = 'none';
+            rushState.timeLeftSec = mode === 'time5' ? 300 : 180;
+            updateRushTimerDisplay();
+            rushState.timerInterval = setInterval(() => {
+                rushState.timeLeftSec--;
+                updateRushTimerDisplay();
+                if (rushState.timeLeftSec <= 0) endRushRun();
+            }, 1000);
+        }
+        loadNextRushPuzzle();
+    }
+
+    async function loadNextRushPuzzle() {
+        if (!rushState.active) return;
+        puzzleState.selectedType = 'rush';
+        const puzzle = await pickNextPuzzle();
+        if (!puzzle) { endRushRun(); return; }
+        loadPuzzleIntoBoard(puzzle);
+    }
+
+    function getIsoWeekKey() {
+        const d = new Date();
+        const oneJan = new Date(d.getFullYear(), 0, 1);
+        const week = Math.ceil((((d - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
+        return `${d.getFullYear()}-W${week}`;
+    }
+    function getRushBests() {
+        try { return JSON.parse(localStorage.getItem('chessPiRushBests') || '{}'); } catch (e) { return {}; }
+    }
+    function saveRushBests(bests) {
+        try { localStorage.setItem('chessPiRushBests', JSON.stringify(bests)); } catch (e) {}
+    }
+
+    function endRushRun() {
+        stopRushRun();
+        const playAreaEl = document.getElementById('rush-play-area');
+        const resultsEl = document.getElementById('rush-results');
+        if (playAreaEl) playAreaEl.style.display = 'none';
+        if (resultsEl) resultsEl.style.display = 'block';
+        const summaryEl = document.getElementById('rush-results-summary');
+        if (summaryEl) summaryEl.textContent = `You solved ${rushState.solved} puzzle${rushState.solved === 1 ? '' : 's'}.`;
+
+        const bests = getRushBests();
+        const todayKey = new Date().toISOString().slice(0, 10);
+        const weekKey = 'week:' + getIsoWeekKey();
+        if (!bests[todayKey] || rushState.solved > bests[todayKey]) bests[todayKey] = rushState.solved;
+        if (!bests[weekKey] || rushState.solved > bests[weekKey]) bests[weekKey] = rushState.solved;
+        saveRushBests(bests);
+        const bestTodayEl = document.getElementById('rush-best-today');
+        const bestWeekEl = document.getElementById('rush-best-week');
+        if (bestTodayEl) bestTodayEl.textContent = bests[todayKey] || 0;
+        if (bestWeekEl) bestWeekEl.textContent = bests[weekKey] || 0;
+    }
+
+    // ---- Wiring: mode-select page ----
+    const modePlayCardEl = document.getElementById('mode-play-card');
+    if (modePlayCardEl) {
+        modePlayCardEl.addEventListener('click', () => switchPage(2));
+    }
+    const modePuzzlesCardEl = document.getElementById('mode-puzzles-card');
+    if (modePuzzlesCardEl) {
+        modePuzzlesCardEl.addEventListener('click', () => switchPage(7));
+    }
+
+    // ---- Wiring: puzzle type selection page ----
+    document.querySelectorAll('.puzzle-type-card').forEach((card) => {
+        card.addEventListener('click', function() {
+            if (this.classList.contains('locked')) {
+                showPremiumModal();
+                return;
+            }
+            puzzleState.selectedType = this.getAttribute('data-puzzle-type');
+            switchPage(8);
+        });
+    });
+    const puzzleTypeBackBtnEl = document.getElementById('puzzle-type-back-btn');
+    if (puzzleTypeBackBtnEl) {
+        puzzleTypeBackBtnEl.addEventListener('click', () => switchPage(1));
+    }
+
+    // ---- Wiring: puzzle difficulty selection page ----
+    document.querySelectorAll('.puzzle-difficulty-card').forEach((card) => {
+        card.addEventListener('click', function() {
+            if (this.classList.contains('locked')) {
+                showPremiumModal();
+                return;
+            }
+            puzzleState.selectedDifficulty = this.getAttribute('data-puzzle-difficulty');
+            switchPage(puzzleState.selectedType === 'rush' ? 10 : 9);
+        });
+    });
+    const puzzleDifficultyBackBtnEl = document.getElementById('puzzle-difficulty-back-btn');
+    if (puzzleDifficultyBackBtnEl) {
+        puzzleDifficultyBackBtnEl.addEventListener('click', () => switchPage(7));
+    }
+
+    // ---- Wiring: puzzles page (normal, non-rush) ----
+    const puzzleNextBtnEl = document.getElementById('puzzle-next-btn');
+    if (puzzleNextBtnEl) {
+        puzzleNextBtnEl.addEventListener('click', startNextPuzzle);
+    }
+    const puzzleHintBtnEl = document.getElementById('puzzle-hint-btn');
+    if (puzzleHintBtnEl) {
+        puzzleHintBtnEl.addEventListener('click', providePuzzleHint);
+    }
+    const puzzleBackBtnEl = document.getElementById('puzzle-back-btn');
+    if (puzzleBackBtnEl) {
+        puzzleBackBtnEl.addEventListener('click', () => switchPage(8));
+    }
+
+    // ---- Wiring: puzzle rush page ----
+    document.querySelectorAll('.rush-mode-card').forEach((card) => {
+        card.addEventListener('click', function() {
+            startRushRun(this.getAttribute('data-rush-mode'));
+        });
+    });
+    const rushPlayAgainBtnEl = document.getElementById('rush-play-again-btn');
+    if (rushPlayAgainBtnEl) {
+        rushPlayAgainBtnEl.addEventListener('click', resetRushUI);
+    }
+    const puzzleRushBackBtnEl = document.getElementById('puzzle-rush-back-btn');
+    if (puzzleRushBackBtnEl) {
+        puzzleRushBackBtnEl.addEventListener('click', () => { stopRushRun(); switchPage(8); });
     }
 });
