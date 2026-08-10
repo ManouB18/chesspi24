@@ -110,38 +110,52 @@
                 </div>
             </div>
         </div>
+        <!-- Mode Selection Page -->
+        <div class="page mode-select-page">
+            <h2 class="page-title">What would you like to do?</h2>
+            <div class="options-container">
+                <div class="option-card mode-card" id="mode-play-card">
+                    <i class="fas fa-chess-board option-icon"></i>
+                    <div class="option-name">Play</div>
+                    <div class="option-desc">Challenge the Bot</div>
+                </div>
+                <div class="option-card mode-card" id="mode-puzzles-card">
+                    <i class="fas fa-puzzle-piece option-icon"></i>
+                    <div class="option-name">Puzzles</div>
+                    <div class="option-desc">Sharpen Your Tactics</div>
+                </div>
+            </div>
+        </div>
         <!-- Theme Selection Page -->
         <div class="page theme-page">
             <h2 class="page-title">Choose Your Board Theme</h2>
             <div class="options-container">
                 <div class="option-card selected" data-theme="brown">
-                    <i class="fas fa-tree option-icon"></i>
+                    <i class="fas fa-mug-hot option-icon"></i>
                     <div class="option-name">Brown</div>
                     <div class="option-desc">Classic Tan</div>
                 </div>
                 <div class="option-card locked" data-theme="green">
-                    <div class="lock-overlay"><i class="fas fa-key"></i></div>
-                    <i class="fas fa-spa option-icon"></i>
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-leaf option-icon"></i>
                     <div class="option-name">Green</div>
                     <div class="option-desc">Fresh Green</div>
                 </div>
                 <div class="option-card locked" data-theme="pink">
-                    <div class="lock-overlay"><i class="fas fa-key"></i></div>
-                    <i class="fas fa-gem option-icon"></i>
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-heart option-icon"></i>
                     <div class="option-name">Pink</div>
                     <div class="option-desc">Soft Rose</div>
                 </div>
                 <div class="option-card locked" data-theme="blue">
-                    <div class="lock-overlay"><i class="fas fa-key"></i></div>
-                    <i class="fas fa-droplet option-icon"></i>
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-water option-icon"></i>
                     <div class="option-name">Blue</div>
                     <div class="option-desc">Pillow Style</div>
                 </div>
             </div>
             <div class="navigation-dots">
-                <div class="dot" data-page="0"></div>
-                <div class="dot active" data-page="1"></div>
-                <div class="dot" data-page="2"></div>
+                <div class="dot active" data-page="2"></div>
                 <div class="dot" data-page="3"></div>
                 <div class="dot" data-page="4"></div>
                 <div class="dot" data-page="5"></div>
@@ -157,29 +171,27 @@
                     <div class="option-desc">Modern Classic</div>
                 </div>
                 <div class="option-card locked" data-piece-set="wood">
-                    <div class="lock-overlay"><i class="fas fa-key"></i></div>
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
                     <img class="option-piece-preview" src="https://images.chesscomfiles.com/chess-themes/pieces/wood/150/wn.png" alt="Wood knight">
                     <div class="option-name">Wood</div>
                     <div class="option-desc">Classic Wooden</div>
                 </div>
                 <div class="option-card locked" data-piece-set="glass">
-                    <div class="lock-overlay"><i class="fas fa-key"></i></div>
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
                     <img class="option-piece-preview" src="https://images.chesscomfiles.com/chess-themes/pieces/glass/150/wn.png" alt="Glass knight">
                     <div class="option-name">Glass</div>
                     <div class="option-desc">Modern Glass</div>
                 </div>
                 <div class="option-card locked" data-piece-set="marble">
-                    <div class="lock-overlay"><i class="fas fa-key"></i></div>
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
                     <img class="option-piece-preview" src="https://images.chesscomfiles.com/chess-themes/pieces/marble/150/wn.png" alt="Marble knight">
                     <div class="option-name">Marble</div>
                     <div class="option-desc">Elegant Marble</div>
                 </div>
             </div>
             <div class="navigation-dots">
-                <div class="dot" data-page="0"></div>
-                <div class="dot" data-page="1"></div>
-                <div class="dot active" data-page="2"></div>
-                <div class="dot" data-page="3"></div>
+                <div class="dot" data-page="2"></div>
+                <div class="dot active" data-page="3"></div>
                 <div class="dot" data-page="4"></div>
                 <div class="dot" data-page="5"></div>
             </div>
@@ -189,35 +201,33 @@
             <h2 class="page-title">Choose Your Opponent</h2>
             <div class="options-container">
                 <div class="option-card selected" data-bot-personality="aggressive">
-                    <i class="fas fa-fire-flame-curved option-icon"></i>
+                    <i class="fas fa-fire option-icon"></i>
                     <div class="option-name">Aggressive Attacker</div>
                     <div class="option-desc">Sacrifices for the attack</div>
                 </div>
                 <div class="option-card locked" data-bot-personality="defensive">
-                    <div class="lock-overlay"><i class="fas fa-key"></i></div>
-                    <i class="fas fa-shield option-icon"></i>
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-shield-halved option-icon"></i>
                     <div class="option-name">Solid Defender</div>
                     <div class="option-desc">Locks up and waits</div>
                 </div>
                 <div class="option-card locked" data-bot-personality="endgame">
-                    <div class="lock-overlay"><i class="fas fa-key"></i></div>
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
                     <i class="fas fa-chess-king option-icon"></i>
                     <div class="option-name">Endgame Technician</div>
                     <div class="option-desc">Trades into winning endgames</div>
                 </div>
                 <div class="option-card locked" data-bot-personality="trickster">
-                    <div class="lock-overlay"><i class="fas fa-key"></i></div>
-                    <i class="fas fa-mask option-icon"></i>
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-hat-wizard option-icon"></i>
                     <div class="option-name">Gambit Trickster</div>
                     <div class="option-desc">Sharp gambits & early traps</div>
                 </div>
             </div>
             <div class="navigation-dots">
-                <div class="dot" data-page="0"></div>
-                <div class="dot" data-page="1"></div>
                 <div class="dot" data-page="2"></div>
-                <div class="dot active" data-page="3"></div>
-                <div class="dot" data-page="4"></div>
+                <div class="dot" data-page="3"></div>
+                <div class="dot active" data-page="4"></div>
                 <div class="dot" data-page="5"></div>
             </div>
         </div>
@@ -226,31 +236,31 @@
             <h2 class="page-title">Choose Difficulty Level</h2>
             <div class="options-container">
                 <div class="option-card selected" data-difficulty="easy">
-                    <i class="fas fa-graduation-cap option-icon"></i>
+                    <i class="fas fa-seedling option-icon"></i>
                     <div class="option-name">Easy</div>
                     <div class="option-desc">For Beginners</div>
                     <div class="difficulty-time-info">No time limit</div>
                     <div class="difficulty-time-info">No extra time</div>
                 </div>
                 <div class="option-card locked" data-difficulty="medium">
-                    <div class="lock-overlay"><i class="fas fa-key"></i></div>
-                    <i class="fas fa-gamepad option-icon"></i>
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-user option-icon"></i>
                     <div class="option-name">Medium</div>
                     <div class="option-desc">Casual Play</div>
                     <div class="difficulty-time-info">15 min</div>
                     <div class="difficulty-time-info">1 extra time (1 min)</div>
                 </div>
                 <div class="option-card locked" data-difficulty="hard">
-                    <div class="lock-overlay"><i class="fas fa-key"></i></div>
-                    <i class="fas fa-bolt option-icon"></i>
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-robot option-icon"></i>
                     <div class="option-name">Hard</div>
                     <div class="option-desc">Challenge</div>
                     <div class="difficulty-time-info">10 min</div>
                     <div class="difficulty-time-info">1 extra time (1 min)</div>
                 </div>
                 <div class="option-card locked" data-difficulty="expert">
-                    <div class="lock-overlay"><i class="fas fa-key"></i></div>
-                    <i class="fas fa-medal option-icon"></i>
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-brain option-icon"></i>
                     <div class="option-name">Expert</div>
                     <div class="option-desc">For Masters</div>
                     <div class="difficulty-time-info">5 min</div>
@@ -258,12 +268,10 @@
                 </div>
             </div>
             <div class="navigation-dots">
-                <div class="dot" data-page="0"></div>
-                <div class="dot" data-page="1"></div>
                 <div class="dot" data-page="2"></div>
                 <div class="dot" data-page="3"></div>
-                <div class="dot active" data-page="4"></div>
-                <div class="dot" data-page="5"></div>
+                <div class="dot" data-page="4"></div>
+                <div class="dot active" data-page="5"></div>
             </div>
         </div>
         <!-- Main Game Page -->
@@ -274,10 +282,10 @@
                     <div class="game-info-container">
                         <div class="left-controls">
                             <div class="control-icon" id="mute-btn" role="button" tabindex="0" aria-label="Mute sounds">
-                                <i class="fas fa-volume-high" id="mute-icon"></i>
+                                <i class="fas fa-volume-up" id="mute-icon"></i>
                             </div>
                             <div class="control-icon premium-crown-btn" id="premium-btn" role="button" tabindex="0" aria-label="Chess Pi Premium subscription">
-                                <i class="fas fa-star"></i>
+                                <i class="fas fa-crown"></i>
                                 <div class="feature-count premium-days-badge" id="premium-days-badge" style="display:none;" title=""></div>
                             </div>
                         </div>
@@ -287,13 +295,13 @@
                         </div>
                         <div class="top-controls">
                             <div class="control-icon" id="game-settings-btn" role="button" tabindex="0" aria-label="Change board theme or piece set">
-                                <i class="fas fa-gear"></i>
+                                <i class="fas fa-sliders"></i>
                             </div>
                             <div class="control-icon" id="advice-btn" role="button" tabindex="0" aria-label="Show advice">
-                                <i class="fas fa-chart-line"></i>
+                                <i class="fas fa-magnifying-glass-chart"></i>
                             </div>
                             <div class="control-icon" id="features-btn" role="button" tabindex="0" aria-label="Show help">
-                                <i class="fas fa-circle-question"></i>
+                                <i class="fas fa-circle-info"></i>
                             </div>
                         </div>
                     </div>
@@ -319,22 +327,22 @@
                     </div>
                     <div class="controls-bottom">
                         <div class="control-icon" id="hint-btn" role="button" tabindex="0" aria-label="Get a hint">
-                            <i class="fas fa-wand-magic-sparkles"></i>
+                            <i class="fas fa-lightbulb"></i>
                             <span>Hint</span>
                             <div class="feature-count" id="hints-count">2</div>
                         </div>
                         <div class="control-icon" id="undo-btn" role="button" tabindex="0" aria-label="Undo last move">
-                            <i class="fas fa-clock-rotate-left"></i>
+                            <i class="fas fa-rotate-left"></i>
                             <span>Undo</span>
                             <div class="feature-count" id="undos-count">2</div>
                         </div>
                         <div class="control-icon" id="threats-btn" role="button" tabindex="0" aria-label="Show threats">
-                            <i class="fas fa-triangle-exclamation"></i>
+                            <i class="fas fa-crosshairs"></i>
                             <span>Threats</span>
                             <div class="feature-count" id="threats-count">2</div>
                         </div>
                         <div class="control-icon" id="extra-time-btn" role="button" tabindex="0" aria-label="Add extra time">
-                            <i class="fas fa-hourglass-half"></i>
+                            <i class="fas fa-stopwatch"></i>
                             <span>+ Time</span>
                             <div class="feature-count" id="extra-time-count">1</div>
                         </div>
@@ -343,11 +351,11 @@
                             <span>Refill</span>
                         </div>
                         <div class="control-icon" id="import-pgn-btn" role="button" tabindex="0" aria-label="Import PGN">
-                            <i class="fas fa-file-import"></i>
+                            <i class="fas fa-download"></i>
                             <span>Imp PGN</span>
                         </div>
                         <div class="control-icon" id="export-pgn-btn" role="button" tabindex="0" aria-label="Export PGN">
-                            <i class="fas fa-file-export"></i>
+                            <i class="fas fa-upload"></i>
                             <span>Exp PGN</span>
                         </div>
                     </div>
@@ -358,10 +366,10 @@
                 <div class="features-content">
                     <div class="features-header">
                         <h2>Game Features Guide</h2>
-                        <span class="features-close"><i class="fas fa-circle-xmark"></i></span>
+                        <span class="features-close"><i class="fas fa-xmark"></i></span>
                     </div>
                     <div class="features-section">
-                        <h3> <i class="fas fa-wand-magic-sparkles"></i> Hint Feature </h3>
+                        <h3> <i class="fas fa-lightbulb"></i> Hint Feature </h3>
                         <p>The Hint feature provides suggestions for your next move. Each difficulty level gives you a different number of hints:</p>
                         <ul class="features-list">
                             <li> <strong>Easy:</strong> 1 hint available </li>
@@ -372,7 +380,7 @@
 
                     </div>
                     <div class="features-section">
-                        <h3> <i class="fas fa-clock-rotate-left"></i> Undo Feature </h3>
+                        <h3> <i class="fas fa-rotate-left"></i> Undo Feature </h3>
                         <p>The Undo feature allows you to take back your last move. Each difficulty level gives you a different number of undos:</p>
                         <ul class="features-list">
                             <li> <strong>Easy:</strong> 1 undo available </li>
@@ -383,7 +391,7 @@
                        
                     </div>
                     <div class="features-section">
-                        <h3> <i class="fas fa-triangle-exclamation"></i> Threats Feature </h3>
+                        <h3> <i class="fas fa-crosshairs"></i> Threats Feature </h3>
                         <p>The Threats feature shows you which pieces are threatened by your opponent and which are protected by your pieces. Each difficulty level gives you a different number of threat visualizations:</p>
                         <ul class="features-list">
                             <li><span class="threat-level-indicator threat-level-high"></span> <strong>High Threat</strong>: Your valuable pieces (Queen, King) are under immediate attack</li>
@@ -397,7 +405,7 @@
                         
                     </div>
                     <div class="features-section">
-                        <h3> <i class="fas fa-hourglass-half"></i> Extra Time Feature </h3>
+                        <h3> <i class="fas fa-stopwatch"></i> Extra Time Feature </h3>
                         <p>The Extra Time feature gives you additional time when you're running low. Each difficulty level gives you a different number of extra time uses:</p>
                         <ul class="features-list">
                             <li> <strong>Easy:</strong> No extra time available </li>
@@ -419,7 +427,7 @@
                         <p> <strong>Note:</strong> The Refill button only activates when all features are completely depleted. Payments are processed securely via Pi Network. </p>
                     </div>
                     <div class="features-section">
-                        <h3> <i class="fas fa-star"></i> Chess Pi Premium </h3>
+                        <h3> <i class="fas fa-crown"></i> Chess Pi Premium </h3>
                         <p>Tap the crown icon to subscribe to Chess Pi Premium and unlock every level, board theme, piece set, and bot personality at once for as long as your subscription is active:</p>
                         <ul class="features-list">
                             <li> <strong>Monthly:</strong> $0.50, billed as a one-time Pi charge that activates 30 days of Premium </li>
@@ -428,7 +436,7 @@
                         <p> <strong>Note:</strong> The yearly plan is highlighted as the best value because it costs less than paying monthly for a full year — the modal shows exactly how much you save. The Pi price for either plan is calculated at the current market rate. </p>
                     </div>
                     <div class="features-section">
-                        <h3> <i class="fas fa-palette"></i> Themes </h3>
+                        <h3> <i class="fas fa-chess-board"></i> Themes </h3>
                         <p>Choose a look for your board. Brown is free by default, while Green, Pink, and Blue are premium themes you can unlock instantly with Pi:</p>
                         <ul class="features-list">
                             <li> <strong>Brown:</strong> Classic tan wooden board — Free </li>
@@ -461,7 +469,7 @@
                         <p> <strong>Note:</strong> Pick a bot personality on the new "Choose Your Opponent" page, right before you choose your difficulty level. Once unlocked, a bot personality stays unlocked for good. The Pi price is calculated at the current market rate. You can also unlock all remaining premium bot personalities at once for 15% off the combined price instead of paying for each one separately. </p>
                     </div>
                     <div class="features-section">
-                        <h3> <i class="fas fa-stopwatch"></i> Time Controls & Difficulty Unlocks </h3>
+                        <h3> <i class="fas fa-clock"></i> Time Controls & Difficulty Unlocks </h3>
                         <p>Each difficulty level has different time controls according to standard chess rules. Only Easy is unlocked from the start — unlock the rest by winning the previous level for free, or instantly with Pi:</p>
                         <ul class="features-list">
                             <li> <strong>Easy:</strong> No time limit - Perfect for learning - Unlocked by default </li>
@@ -473,7 +481,7 @@
                         <p>The timer starts when the game begins. Time pressure adds excitement to the game!</p>
                     </div>
                     <div class="features-section">
-                        <h3> <i class="fas fa-file-import"></i> <i class="fas fa-file-export"></i> PGN Import/Export </h3>
+                        <h3> <i class="fas fa-download"></i> <i class="fas fa-upload"></i> PGN Import/Export </h3>
                         <p>PGN (Portable Game Notation) is a standard format for recording chess games. You can use it to save, share, or analyze your games.</p>
                         <ul class="features-list">
                             <li> <strong>Export PGN:</strong> Saves the current game in PGN format for sharing or analysis. </li>
@@ -482,7 +490,7 @@
                         <p>Use these features to review past games or study famous matches.</p>
                     </div>
                     <div class="features-section">
-                        <h3> <i class="fas fa-hand"></i> Surrender Feature </h3>
+                        <h3> <i class="fas fa-flag"></i> Surrender Feature </h3>
                         <p>To surrender as white, double-click on your king when it's your turn. A confirmation dialog will appear. If you confirm, the game ends with black winning, and you'll see options for a new game or settings.</p>
                     </div>
                     <p><strong>Note:</strong> If you want to pause the game for a break or to drink a cup of coffee, open the help icon and leave it active.</p>
@@ -493,7 +501,7 @@
                 <div class="advice-content">
                     <div class="advice-header">
                         <h2>Threat Report</h2>
-                        <span class="advice-close"><i class="fas fa-circle-xmark"></i></span>
+                        <span class="advice-close"><i class="fas fa-xmark"></i></span>
                     </div>
                     <div class="advice-section">
                         <div class="threat-info-header">
@@ -524,7 +532,7 @@
             <!-- Statistics Modal -->
             <div id="stats-modal" class="modal">
                 <div class="modal-content stats-content">
-                    <span class="close stats-close"><i class="fas fa-circle-xmark"></i></span>
+                    <span class="close stats-close"><i class="fas fa-xmark"></i></span>
                     <h2>Game Statistics</h2>
                     
                     <div class="stats-tabs">
@@ -641,7 +649,7 @@
             <!-- Leaderboard Modal (standalone page, separate from Statistics) -->
             <div id="leaderboard-modal" class="modal">
                 <div class="modal-content stats-content">
-                    <span class="close leaderboard-close"><i class="fas fa-circle-xmark"></i></span>
+                    <span class="close leaderboard-close"><i class="fas fa-xmark"></i></span>
                     <h2>Leaderboard — Top Players</h2>
                     <div class="stats-scrollable-content">
                         <div class="stats-section">
@@ -655,7 +663,7 @@
             <!-- Import PGN Modal -->
             <div id="import-pgn-modal" class="modal">
                 <div class="modal-content">
-                    <span class="close"><i class="fas fa-circle-xmark"></i></span>
+                    <span class="close"><i class="fas fa-xmark"></i></span>
                     <h2>Import PGN</h2>
                     <textarea id="pgn-input" rows="5" style="width: 100%;"></textarea>
                     <input type="file" id="pgn-file" accept=".pgn">
@@ -688,7 +696,7 @@
             </div>
             <div id="surrender-modal" class="modal">
                 <div class="modal-content">
-                    <span class="close"><i class="fas fa-circle-xmark"></i></span>
+                    <span class="close"><i class="fas fa-xmark"></i></span>
                     <h2>Confirm Surrender</h2>
                     <p>Are you sure you want to surrender?</p>
                     <button id="confirm-surrender" class="nav-button">Surrender</button>
@@ -703,7 +711,7 @@
                  existing unlock modal instead of a dead end. -->
             <div id="game-settings-modal" class="modal">
                 <div class="modal-content game-settings-modal-content">
-                    <span class="close"><i class="fas fa-circle-xmark"></i></span>
+                    <span class="close"><i class="fas fa-xmark"></i></span>
                     <h2>Board, Pieces & Bot</h2>
                     <p class="game-settings-modal-desc">Changes apply instantly — your game continues exactly where it is.</p>
                     <div class="settings-section">
@@ -724,13 +732,133 @@
                 </div>
             </div>
         </div>
+        <!-- Puzzle Type Selection Page -->
+        <div class="page puzzle-type-page">
+            <h2 class="page-title">Choose Puzzle Type</h2>
+            <div class="options-container">
+                <div class="option-card puzzle-type-card" data-puzzle-type="tactical">
+                    <i class="fas fa-bullseye option-icon"></i>
+                    <div class="option-name">Tactical Puzzles</div>
+                    <div class="option-desc">Find the winning move — fork, pin, or more</div>
+                </div>
+                <div class="option-card puzzle-type-card locked" data-puzzle-type="rush">
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-bolt option-icon"></i>
+                    <div class="option-name">Puzzle Rush</div>
+                    <div class="option-desc">Solve as many as you can, beat the clock</div>
+                </div>
+                <div class="option-card puzzle-type-card locked" data-puzzle-type="mateInX">
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-chess-king option-icon"></i>
+                    <div class="option-name">Mate in X</div>
+                    <div class="option-desc">Forced checkmate in the fewest moves</div>
+                </div>
+                <div class="option-card puzzle-type-card locked" data-puzzle-type="endgame">
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-chess-board option-icon"></i>
+                    <div class="option-name">Endgame Puzzles</div>
+                    <div class="option-desc">Promote a pawn, hold a draw, force zugzwang</div>
+                </div>
+            </div>
+            <button id="puzzle-type-back-btn" class="nav-button puzzle-back-btn">Back</button>
+        </div>
+        <!-- Puzzle Difficulty Selection Page -->
+        <div class="page puzzle-difficulty-page">
+            <h2 class="page-title">Choose Difficulty</h2>
+            <div class="options-container">
+                <div class="option-card puzzle-difficulty-card" data-puzzle-difficulty="easy">
+                    <i class="fas fa-seedling option-icon"></i>
+                    <div class="option-name">Easy</div>
+                    <div class="option-desc">Rating up to 1200</div>
+                </div>
+                <div class="option-card puzzle-difficulty-card locked" data-puzzle-difficulty="medium">
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-chess-pawn option-icon"></i>
+                    <div class="option-name">Medium</div>
+                    <div class="option-desc">Rating 1200–1599</div>
+                </div>
+                <div class="option-card puzzle-difficulty-card locked" data-puzzle-difficulty="hard">
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-chess-knight option-icon"></i>
+                    <div class="option-name">Hard</div>
+                    <div class="option-desc">Rating 1600–1999</div>
+                </div>
+                <div class="option-card puzzle-difficulty-card locked" data-puzzle-difficulty="expert">
+                    <div class="lock-overlay"><i class="fas fa-lock"></i></div>
+                    <i class="fas fa-crown option-icon"></i>
+                    <div class="option-name">Expert</div>
+                    <div class="option-desc">Rating 2000+</div>
+                </div>
+            </div>
+            <button id="puzzle-difficulty-back-btn" class="nav-button puzzle-back-btn">Back</button>
+        </div>
+        <!-- Puzzles Page -->
+        <div class="page puzzles-page">
+            <div class="puzzles-page-header">
+                <h2 class="page-title">Puzzles <span id="puzzle-rating" class="puzzle-rating-badge"></span></h2>
+                <div class="puzzle-stats-row">
+                    <span class="puzzle-points-display"><i class="fas fa-star"></i> <span id="puzzle-points">0</span> pts</span>
+                    <span id="puzzle-mate-counter" class="puzzle-mate-counter" style="display:none;"></span>
+                </div>
+            </div>
+            <div class="puzzle-body">
+                <div class="chessboard puzzle-chessboard-large" id="puzzle-chessboard"></div>
+                <div id="puzzle-endgame-tip" class="puzzle-endgame-tip" style="display:none;"></div>
+                <div id="puzzle-feedback" class="puzzle-feedback">Loading puzzle…</div>
+                <div class="puzzle-actions-row">
+                    <button id="puzzle-hint-btn" class="nav-button puzzle-hint-btn"><i class="fas fa-lightbulb"></i> Hint</button>
+                    <button id="puzzle-next-btn" class="nav-button" style="display:none;">Next Puzzle</button>
+                </div>
+            </div>
+            <button id="puzzle-back-btn" class="nav-button puzzle-back-btn">Back</button>
+        </div>
+        <!-- Puzzle Rush Page -->
+        <div class="page puzzle-rush-page">
+            <div class="puzzles-page-header">
+                <h2 class="page-title">Puzzle Rush</h2>
+            </div>
+            <div id="rush-mode-select" class="options-container rush-mode-select">
+                <div class="option-card rush-mode-card" data-rush-mode="time3">
+                    <i class="fas fa-stopwatch option-icon"></i>
+                    <div class="option-name">3 Minutes</div>
+                    <div class="option-desc">Solve as many as you can</div>
+                </div>
+                <div class="option-card rush-mode-card" data-rush-mode="time5">
+                    <i class="fas fa-stopwatch option-icon"></i>
+                    <div class="option-name">5 Minutes</div>
+                    <div class="option-desc">Solve as many as you can</div>
+                </div>
+                <div class="option-card rush-mode-card" data-rush-mode="survival">
+                    <i class="fas fa-heart option-icon"></i>
+                    <div class="option-name">Survival</div>
+                    <div class="option-desc">Ends after 3 mistakes</div>
+                </div>
+            </div>
+            <div id="rush-play-area" class="puzzle-body" style="display:none;">
+                <div class="puzzle-stats-row rush-stats-row">
+                    <span class="rush-stat"><i class="fas fa-check"></i> <span id="rush-solved-count">0</span></span>
+                    <span class="rush-stat" id="rush-timer-display" style="display:none;"><i class="fas fa-clock"></i> <span id="rush-time-left">0:00</span></span>
+                    <span class="rush-stat" id="rush-mistakes-display" style="display:none;"><i class="fas fa-heart-crack"></i> <span id="rush-mistakes-left">3</span></span>
+                </div>
+                <div class="chessboard puzzle-chessboard-large" id="rush-chessboard"></div>
+                <div id="rush-feedback" class="puzzle-feedback"></div>
+            </div>
+            <div id="rush-results" class="rush-results" style="display:none;">
+                <h3>Run Complete!</h3>
+                <p id="rush-results-summary"></p>
+                <p class="rush-best-line">Today's Best: <span id="rush-best-today">0</span> &nbsp;|&nbsp; This Week's Best: <span id="rush-best-week">0</span></p>
+                <p class="puzzle-endgame-tip" style="display:block;">These bests are saved on this device only — there's no shared leaderboard across players yet.</p>
+                <button id="rush-play-again-btn" class="nav-button">Play Again</button>
+            </div>
+            <button id="puzzle-rush-back-btn" class="nav-button puzzle-back-btn">Back</button>
+        </div>
         <!-- Navigation Arrows -->
         <div class="nav-arrows">
             <div class="nav-arrow left-arrow hidden">
-                <i class="fas fa-angle-left"></i>
+                <i class="fas fa-chevron-left"></i>
             </div>
             <div class="nav-arrow right-arrow">
-                <i class="fas fa-angle-right"></i>
+                <i class="fas fa-chevron-right"></i>
             </div>
         </div>
         <!-- Unlock/Payment modal: lives outside all .page divs so it can pop
@@ -739,18 +867,18 @@
              would otherwise hide this too if it were nested inside one). -->
         <div id="unlock-modal" class="modal">
             <div class="modal-content unlock-modal-content">
-                <span class="close"><i class="fas fa-circle-xmark"></i></span>
-                <div class="unlock-lock-icon"><i class="fas fa-key"></i></div>
+                <span class="close"><i class="fas fa-xmark"></i></span>
+                <div class="unlock-lock-icon"><i class="fas fa-lock"></i></div>
                 <span class="unlock-type-badge" id="unlock-type-badge">Item</span>
                 <h2 id="unlock-modal-title">Locked</h2>
                 <p id="unlock-modal-desc">This item is locked.</p>
-                <p id="unlock-tried-note" class="unlock-tried-note hidden"><i class="fas fa-circle-exclamation"></i><span id="unlock-tried-note-text"></span></p>
+                <p id="unlock-tried-note" class="unlock-tried-note hidden"><i class="fas fa-circle-info"></i><span id="unlock-tried-note-text"></span></p>
                 <button id="unlock-pay-btn" class="nav-button unlock-pay-btn">
                     <div class="pi-coin-icon-small">π</div>
                     <span id="unlock-price-text">Unlock for 10 π</span>
                 </button>
                 <button id="unlock-all-btn" class="nav-button unlock-all-btn">
-                    <i class="fas fa-unlock-keyhole"></i>
+                    <i class="fas fa-unlock"></i>
                     <span id="unlock-all-text">Unlock All Themes — 25 π</span>
                 </button>
                 <button id="unlock-cancel-btn" class="nav-button unlock-cancel-btn">Maybe Later</button>
@@ -762,8 +890,8 @@
              reason as the unlock modal. -->
         <div id="premium-modal" class="modal">
             <div class="modal-content premium-modal-content">
-                <span class="close"><i class="fas fa-circle-xmark"></i></span>
-                <div class="premium-crown-icon"><i class="fas fa-star"></i></div>
+                <span class="close"><i class="fas fa-xmark"></i></span>
+                <div class="premium-crown-icon"><i class="fas fa-crown"></i></div>
                 <h2 id="premium-modal-title">Chess Pi Premium</h2>
                 <p id="premium-modal-desc" class="premium-modal-desc">Unlock every level, board theme, piece set, and bot personality for as long as your subscription is active.</p>
                 <div class="premium-plans">
