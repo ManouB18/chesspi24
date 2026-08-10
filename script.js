@@ -119,12 +119,30 @@ document.addEventListener('DOMContentLoaded', function() {
         if (typeof pauseTimer === 'function') pauseTimer();
     }
 
+    // If a promo/refill toast (see showPromoMessage further down) would
+    // otherwise appear while the custom alert modal is on screen — e.g.
+    // Extra Time hits 0 the same moment "Added 1 minute!" pops up — it
+    // gets stashed here instead of showing immediately, so it never
+    // visibly stacks underneath the alert. Flushed the moment the alert
+    // is dismissed, from whichever path closes it (OK button or tapping
+    // outside).
+    let pendingPromoMessages = null;
+    function dismissCustomAlertModal() {
+        const modal = document.getElementById('custom-alert-modal');
+        if (modal) modal.style.display = 'none';
+        if (typeof resumeTimer === 'function') resumeTimer();
+        if (pendingPromoMessages) {
+            const messages = pendingPromoMessages;
+            pendingPromoMessages = null;
+            showPromoMessage(messages);
+        }
+    }
+
     // Close the window when OK is clicked
     const customAlertOkBtn = document.getElementById('custom-alert-ok');
     if (customAlertOkBtn) {
         customAlertOkBtn.addEventListener('click', function() {
-            document.getElementById('custom-alert-modal').style.display = 'none';
-            if (typeof resumeTimer === 'function') resumeTimer();
+            dismissCustomAlertModal();
         });
     } else {
         console.error('#custom-alert-ok not found in HTML');
@@ -134,8 +152,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.addEventListener('click', function(event) {
         const modal = document.getElementById('custom-alert-modal');
         if (modal && event.target === modal) {
-            modal.style.display = 'none';
-            if (typeof resumeTimer === 'function') resumeTimer();
+            dismissCustomAlertModal();
         }
     });
 
@@ -186,6 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
         theme: 'brown',
         pieceSet: 'neo',
         difficulty: 'easy',
+        botPersonality: 'aggressive',
         hints: 1,
         undos: 1,
         threats: 1,
@@ -193,24 +211,84 @@ document.addEventListener('DOMContentLoaded', function() {
         soundMuted: false
     };
 
+    // FREE TRIAL SYSTEM (continued): which locked theme/piece-set/level, if
+    // any, is currently being sampled for free THIS session. In-memory only
+    // (never persisted), so a reload always starts clean. renderLockState()
+    // treats whichever item is named here as valid to keep on screen even
+    // though it isn't actually unlocked, so a background progress sync
+    // mid-trial can't silently snap the selection back to the default.
+    // Cleared (and re-locked) the moment the trial game ends — see endGame().
+    let activeTrialTheme = null;
+    let activeTrialPieceSet = null;
+    let activeTrialLevel = null;
+    let activeTrialBotPersonality = null;
+
     // ===================================================================
     // PLAYER PROGRESS (unlocked levels/themes) — synced with the server via
     // the player's Pi identity, so it follows them across devices instead
     // of being tied to a single phone's local storage.
     // ===================================================================
-    // Only Easy (level), Brown (theme), and Neo (piece set) are unlocked by
-    // default. Everything else is premium: levels unlock by beating the
-    // previous one for free, or instantly with a Pi payment; themes and
-    // piece sets only unlock via a Pi payment (see the dynamic pricing
+    // Only Easy (level), Brown (theme), Neo (piece set), and the Aggressive
+    // Attacker bot personality are unlocked by default. Everything else is
+    // premium: levels unlock by beating the previous one for free, or
+    // instantly with a Pi payment; themes, piece sets, and bot
+    // personalities only unlock via a Pi payment (see the dynamic pricing
     // section below).
     let playerProgress = {
         unlockedLevels: ['easy'],
         unlockedThemes: ['brown'],
-        unlockedPieceSets: ['neo']
+        unlockedPieceSets: ['neo'],
+        unlockedBotPersonalities: ['aggressive'],
+        // Pi Premium subscription state. premiumExpiresAt is an epoch-ms
+        // timestamp; while it's in the future every level/theme/piece-set
+        // is treated as unlocked (see isPremiumActive() below) without
+        // touching the underlying unlockedLevels/Themes/PieceSets arrays,
+        // so a lapsed subscription cleanly reveals whatever was already
+        // owned outright.
+        premiumPlan: null,       // 'monthly' | 'yearly' | null
+        premiumExpiresAt: null,
+        // Subset of the arrays above that were actually PAID for with Pi
+        // (as opposed to levels earned for free by winning the previous
+        // one). Tracked separately purely to grant the VIP leaderboard
+        // badge to players who've spent Pi on the game — see isVipMember()
+        // below. Purchases are permanent, so this never shrinks.
+        purchasedLevels: [],
+        purchasedThemes: [],
+        purchasedPieceSets: [],
+        purchasedBotPersonalities: [],
+        // One-time free trial tracking: every locked level/theme/piece-set/
+        // bot personality may be sampled for free exactly once (see
+        // showUnlockModal-bypass logic in the option-card click handlers
+        // below). Once an item's name lands in one of these arrays, its
+        // single free trial has been spent and it goes straight to the
+        // paywall from then on. Permanent/additive — never shrinks — same
+        // shape as the purchasedX arrays above, and synced the same way.
+        triedLevels: [],
+        triedThemes: [],
+        triedPieceSets: [],
+        triedBotPersonalities: []
     };
     let piAccessToken = null;
     let piUserUid = null;
     let piUsername = null;
+
+    // Extra safety net on top of the piAccessToken check: the Pi SDK
+    // script (sdk.minepi.com/pi-sdk.js) loads fine in *any* browser, so
+    // `typeof Pi !== 'undefined'` alone doesn't prove we're inside Pi
+    // Browser — only that the script downloaded. Pi Browser's webview adds
+    // "PiBrowser" to the user agent, so we check that too before ever
+    // treating a session as eligible for the free trial. Belt-and-suspenders:
+    // Pi.authenticate() should already fail/hang outside Pi Browser (it
+    // needs the native app's message bridge), but this makes the
+    // restriction explicit and not solely dependent on that behavior.
+    function isPiBrowserEnvironment() {
+        return typeof navigator !== 'undefined' && /PiBrowser/i.test(navigator.userAgent || '');
+    }
+    // Signed, server-issued token proving when the current game started and
+    // at what difficulty (see start-game.js). Requested fresh for every new
+    // game and consumed (single-use) by submit-score.js — never trust a
+    // client-computed result/score without this.
+    let currentGameToken = null;
 
     // Local cache is used immediately on load (works offline / outside Pi
     // Browser) and is overwritten once the server responds with the
@@ -223,6 +301,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (Array.isArray(parsed.unlockedLevels)) playerProgress.unlockedLevels = parsed.unlockedLevels;
                 if (Array.isArray(parsed.unlockedThemes)) playerProgress.unlockedThemes = parsed.unlockedThemes;
                 if (Array.isArray(parsed.unlockedPieceSets)) playerProgress.unlockedPieceSets = parsed.unlockedPieceSets;
+                if (Array.isArray(parsed.unlockedBotPersonalities)) playerProgress.unlockedBotPersonalities = parsed.unlockedBotPersonalities;
+                if (typeof parsed.premiumPlan === 'string') playerProgress.premiumPlan = parsed.premiumPlan;
+                if (typeof parsed.premiumExpiresAt === 'number') playerProgress.premiumExpiresAt = parsed.premiumExpiresAt;
+                if (Array.isArray(parsed.purchasedLevels)) playerProgress.purchasedLevels = parsed.purchasedLevels;
+                if (Array.isArray(parsed.purchasedThemes)) playerProgress.purchasedThemes = parsed.purchasedThemes;
+                if (Array.isArray(parsed.purchasedPieceSets)) playerProgress.purchasedPieceSets = parsed.purchasedPieceSets;
+                if (Array.isArray(parsed.purchasedBotPersonalities)) playerProgress.purchasedBotPersonalities = parsed.purchasedBotPersonalities;
+                if (Array.isArray(parsed.triedLevels)) playerProgress.triedLevels = parsed.triedLevels;
+                if (Array.isArray(parsed.triedThemes)) playerProgress.triedThemes = parsed.triedThemes;
+                if (Array.isArray(parsed.triedPieceSets)) playerProgress.triedPieceSets = parsed.triedPieceSets;
+                if (Array.isArray(parsed.triedBotPersonalities)) playerProgress.triedBotPersonalities = parsed.triedBotPersonalities;
             }
         } catch (e) {
             console.error('loadPlayerProgressFromLocalCache failed:', e);
@@ -249,6 +338,47 @@ document.addEventListener('DOMContentLoaded', function() {
     // Chess.com's own public piece CDN, the same one already used for Neo,
     // so no new asset hosting is needed.
     const LOCKABLE_PIECE_SETS = ['wood', 'glass', 'marble'];
+    // Bot personalities: Aggressive Attacker is free/unlocked from the
+    // start (same role Easy/Brown/Neo play for their categories); Solid
+    // Defender, Endgame Technician, and Gambit Trickster are premium and
+    // unlock the same way themes/piece sets do (Pi payment only — there is
+    // no free "beat the previous one" progression for personalities).
+    const LOCKABLE_BOT_PERSONALITIES = ['defensive', 'endgame', 'trickster'];
+    // Display metadata for each bot personality — used by the bot-selection
+    // page (index.html cards use the same 'id's as data-bot-personality)
+    // and by the unlock modal. 'free' mirrors how Easy/Brown/Neo work: the
+    // one item in the category unlocked from the start.
+    const BOT_PERSONALITIES = {
+        aggressive: {
+            id: 'aggressive',
+            name: 'Aggressive Attacker',
+            icon: 'fa-fire-flame-curved',
+            desc: 'Sacrifices material for open lines and relentless attacks on your king.',
+            free: true
+        },
+        defensive: {
+            id: 'defensive',
+            name: 'Solid Defender',
+            icon: 'fa-shield',
+            desc: 'Locks up the position, keeps the king safe, and waits for you to overextend.',
+            free: false
+        },
+        endgame: {
+            id: 'endgame',
+            name: 'Endgame Technician',
+            icon: 'fa-chess-king',
+            desc: 'Trades pieces the moment it gets ahead and converts small edges with precise endgame technique.',
+            free: false
+        },
+        trickster: {
+            id: 'trickster',
+            name: 'Gambit Trickster',
+            icon: 'fa-mask',
+            desc: 'Opens with sharp gambits and early traps to throw your preparation off balance.',
+            free: false
+        }
+    };
+    const BOT_PERSONALITY_ORDER = ['aggressive', 'defensive', 'endgame', 'trickster'];
 
     // ===================================================================
     // DYNAMIC PI PRICING
@@ -260,8 +390,26 @@ document.addEventListener('DOMContentLoaded', function() {
     // pays always tracks the real market rate instead of being a stale
     // hardcoded number of Pi.
     const UNLOCK_PRICE_USD = 0.70;   // single theme / level / piece-set unlock
-    const REFILL_PRICE_USD = 0.01;  // "Refill" feature top-up (no discount ever applies)
+    const REFILL_PRICE_USD = 0.006;  // "Refill" feature top-up (no discount ever applies)
     const BUNDLE_DISCOUNT_RATE = 0.15; // 15% off when buying an entire remaining category at once
+
+    // -------------------------------------------------------------
+    // PI PREMIUM SUBSCRIPTION — separate from the Refill top-up above.
+    // Two plans, priced in USD and converted to Pi at the live market
+    // rate exactly like every other price in this file. The yearly plan
+    // is deliberately priced below 12x the monthly rate so it can be
+    // marketed as the "best value" option; the saved amount is derived
+    // here (never hardcoded) so it always reflects the real numbers.
+    // -------------------------------------------------------------
+    const PREMIUM_MONTHLY_USD = 0.50;  // Pi Premium — monthly plan
+    const PREMIUM_YEARLY_USD = 4.00;   // Pi Premium — yearly plan
+    const PREMIUM_MONTHLY_DAYS = 30;
+    const PREMIUM_YEARLY_DAYS = 365;
+    // What 12 straight months of the monthly plan would have cost — the
+    // baseline the yearly plan's savings are measured against.
+    const PREMIUM_YEARLY_EQUIVALENT_USD = PREMIUM_MONTHLY_USD * 12;
+    const PREMIUM_YEARLY_SAVINGS_USD = Math.round((PREMIUM_YEARLY_EQUIVALENT_USD - PREMIUM_YEARLY_USD) * 100) / 100;
+    const PREMIUM_YEARLY_SAVINGS_PERCENT = Math.round((PREMIUM_YEARLY_SAVINGS_USD / PREMIUM_YEARLY_EQUIVALENT_USD) * 100);
 
     let piUsdPrice = null;        // last known PI → USD rate
     let piUsdPriceFetchedAt = 0;  // when it was last fetched (ms epoch)
@@ -349,20 +497,98 @@ document.addEventListener('DOMContentLoaded', function() {
         const discountedUsd = totalUsd * (1 - BUNDLE_DISCOUNT_RATE);
         return usdToPi(discountedUsd);
     }
-    // "Refill" feature top-up price, in Pi. Flat $0.01 — never discounted,
+    // "Refill" feature top-up price, in Pi. Flat $0.006 — never discounted,
     // regardless of how it's purchased.
     function getRefillPricePi() {
         return usdToPi(REFILL_PRICE_USD);
     }
+    // Pi Premium subscription prices, in Pi, at the current market rate.
+    function getPremiumMonthlyPricePi() {
+        return usdToPi(PREMIUM_MONTHLY_USD);
+    }
+    function getPremiumYearlyPricePi() {
+        return usdToPi(PREMIUM_YEARLY_USD);
+    }
 
+    // Returns true while a Pi Premium subscription is active (i.e. its
+    // expiry timestamp is still in the future). A lapsed/never-purchased
+    // subscription simply returns false — nothing else changes.
+    // ── DEV/TEST TOGGLE ──────────────────────────────────────────────────
+    // Set to true to bypass ALL paywalls locally (levels, themes, piece
+    // sets, bot personalities, Premium) for testing without spending real
+    // Pi. Every unlock check below ultimately falls back to
+    // isPremiumActive(), so flipping this one flag unlocks everything.
+    // MUST be set back to false before deploying / shipping to real users.
+    const DEV_UNLOCK_ALL = false;
+
+    function isPremiumActive() {
+        if (DEV_UNLOCK_ALL) return true;
+        return !!(playerProgress.premiumExpiresAt && playerProgress.premiumExpiresAt > Date.now());
+    }
+    // VIP leaderboard badge: true for an active Premium subscriber, OR a
+    // player who has ever paid Pi for at least one theme, piece set, or
+    // level unlock (permanent, so this never turns back off once earned —
+    // unlike Premium, which only counts while it's active).
+    function isVipMember() {
+        return isPremiumActive()
+            || (playerProgress.purchasedLevels && playerProgress.purchasedLevels.length > 0)
+            || (playerProgress.purchasedThemes && playerProgress.purchasedThemes.length > 0)
+            || (playerProgress.purchasedPieceSets && playerProgress.purchasedPieceSets.length > 0);
+    }
     function isLevelUnlocked(level) {
-        return playerProgress.unlockedLevels.includes(level);
+        return isPremiumActive() || playerProgress.unlockedLevels.includes(level);
     }
     function isThemeUnlocked(theme) {
-        return playerProgress.unlockedThemes.includes(theme);
+        return isPremiumActive() || playerProgress.unlockedThemes.includes(theme);
     }
     function isPieceSetUnlocked(pieceSet) {
-        return playerProgress.unlockedPieceSets.includes(pieceSet);
+        return isPremiumActive() || playerProgress.unlockedPieceSets.includes(pieceSet);
+    }
+    function isBotPersonalityUnlocked(personality) {
+        return isPremiumActive() || playerProgress.unlockedBotPersonalities.includes(personality);
+    }
+
+    // FREE TRIAL SYSTEM: every locked level/theme/piece-set can be sampled
+    // once for free, to give the player a taste of what they'd be buying.
+    // hasTriedX() reports whether that single trial has already been used;
+    // markXTried() spends it (permanent — never reset client-side).
+    function hasTriedLevel(level) {
+        return playerProgress.triedLevels.includes(level);
+    }
+    function hasTriedTheme(theme) {
+        return playerProgress.triedThemes.includes(theme);
+    }
+    function hasTriedPieceSet(pieceSet) {
+        return playerProgress.triedPieceSets.includes(pieceSet);
+    }
+    function hasTriedBotPersonality(personality) {
+        return playerProgress.triedBotPersonalities.includes(personality);
+    }
+    // Records that a locked item's one-time free trial was just spent,
+    // persists it locally, and syncs it to the server in the background
+    // (best-effort — same pattern as recordPurchase()). Deliberately does
+    // NOT touch unlockedLevels/Themes/PieceSets, so the item stays locked
+    // for every selection after this one; renderLockState()'s safety net
+    // is what actually snaps the UI/selection back to locked once it next
+    // runs (app reload, returning to setup, next server sync, etc.).
+    function markTried(category, name) {
+        const key = category === 'level' ? 'triedLevels'
+            : category === 'theme' ? 'triedThemes'
+            : category === 'bot' ? 'triedBotPersonalities'
+            : 'triedPieceSets';
+        if (!playerProgress[key].includes(name)) {
+            playerProgress[key].push(name);
+            savePlayerProgressToLocalCache();
+            syncProgressToServer();
+        }
+    }
+    // One-time trial toast shown the moment a locked item is sampled for
+    // free, so the player understands why it'll be locked again next time.
+    function showTrialToast(displayName) {
+        const message = (typeof i18next !== 'undefined' && i18next.t)
+            ? i18next.t('freeTrialUsed', { name: displayName })
+            : `Enjoy your one-time free trial of ${displayName}! It'll lock again after this — unlock it permanently anytime with Pi.`;
+        showCustomAlert(message);
     }
     function getNextLevel(currentLevel) {
         const idx = LEVEL_SEQUENCE.indexOf(currentLevel);
@@ -384,42 +610,75 @@ document.addEventListener('DOMContentLoaded', function() {
     function getRemainingLockedPieceSets() {
         return LOCKABLE_PIECE_SETS.filter(p => !isPieceSetUnlocked(p));
     }
+    function getRemainingLockedBotPersonalities() {
+        return LOCKABLE_BOT_PERSONALITIES.filter(b => !isBotPersonalityUnlocked(b));
+    }
 
     // Refreshes the lock icon/dimming on every difficulty & theme card to
     // match the current playerProgress. Safe to call anytime (page load,
     // after a payment, after a win, after the server sync resolves, etc.).
+    // Toggles a card's locked/unlocked visual state, including swapping
+    // its lock badge between a closed padlock (still locked) and an open
+    // one (purchased/unlocked) — see the .lock-overlay.unlocked-badge rule
+    // in styles.css. Cards that were never locked to begin with (the
+    // free-by-default item in each category) have no .lock-overlay element
+    // at all, so the querySelector below simply finds nothing for them.
+    function setCardLockState(card, unlocked) {
+        card.classList.toggle('locked', !unlocked);
+        const badge = card.querySelector('.lock-overlay');
+        if (!badge) return;
+        const icon = badge.querySelector('i');
+        badge.classList.toggle('unlocked-badge', unlocked);
+        if (icon) {
+            icon.classList.toggle('fa-lock-keyhole', !unlocked);
+            icon.classList.toggle('fa-unlock-keyhole', unlocked);
+        }
+    }
+
     function renderLockState() {
         document.querySelectorAll('.option-card[data-difficulty]').forEach((card) => {
             const level = card.getAttribute('data-difficulty');
-            card.classList.toggle('locked', !isLevelUnlocked(level));
+            setCardLockState(card, isLevelUnlocked(level));
         });
         document.querySelectorAll('.option-card[data-theme]').forEach((card) => {
             const theme = card.getAttribute('data-theme');
-            card.classList.toggle('locked', !isThemeUnlocked(theme));
+            setCardLockState(card, isThemeUnlocked(theme));
         });
         document.querySelectorAll('.option-card[data-piece-set]').forEach((card) => {
             const pieceSet = card.getAttribute('data-piece-set');
-            card.classList.toggle('locked', !isPieceSetUnlocked(pieceSet));
+            setCardLockState(card, isPieceSetUnlocked(pieceSet));
+        });
+        document.querySelectorAll('.option-card[data-bot-personality]').forEach((card) => {
+            const personality = card.getAttribute('data-bot-personality');
+            setCardLockState(card, isBotPersonalityUnlocked(personality));
         });
 
         // Safety net: if the currently-selected difficulty somehow isn't
         // unlocked (e.g. stale saved settings), fall back to Easy so the
-        // player can never get stuck on a locked level.
-        if (!isLevelUnlocked(userSettings.difficulty)) {
+        // player can never get stuck on a locked level. An item currently
+        // being sampled via its one-time free trial is exempted so this
+        // net doesn't yank it away mid-session (e.g. a background progress
+        // sync resolving while a trial game is in progress) — the trial
+        // ends, and this net starts applying to it again, only once
+        // endGame() clears the active-trial flag.
+        if (!isLevelUnlocked(userSettings.difficulty) && userSettings.difficulty !== activeTrialLevel) {
             userSettings.difficulty = 'easy';
         }
-        if (!isThemeUnlocked(userSettings.theme)) {
+        if (!isThemeUnlocked(userSettings.theme) && userSettings.theme !== activeTrialTheme) {
             userSettings.theme = 'brown';
         }
-        if (!isPieceSetUnlocked(userSettings.pieceSet)) {
+        if (!isPieceSetUnlocked(userSettings.pieceSet) && userSettings.pieceSet !== activeTrialPieceSet) {
             userSettings.pieceSet = 'neo';
+        }
+        if (!isBotPersonalityUnlocked(userSettings.botPersonality) && userSettings.botPersonality !== activeTrialBotPersonality) {
+            userSettings.botPersonality = 'aggressive';
         }
     }
 
     // Merges newly-unlocked items into playerProgress (no duplicates),
     // updates the local cache immediately, and syncs to the server in the
     // background if we have a verified Pi identity.
-    function grantProgress({ levels = [], themes = [], pieceSets = [] } = {}) {
+    function grantProgress({ levels = [], themes = [], pieceSets = [], botPersonalities = [] } = {}) {
         let changed = false;
         levels.forEach((lvl) => {
             if (!playerProgress.unlockedLevels.includes(lvl)) {
@@ -439,6 +698,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 changed = true;
             }
         });
+        botPersonalities.forEach((bp) => {
+            if (!playerProgress.unlockedBotPersonalities.includes(bp)) {
+                playerProgress.unlockedBotPersonalities.push(bp);
+                changed = true;
+            }
+        });
         if (changed) {
             savePlayerProgressToLocalCache();
             syncProgressToServer();
@@ -447,9 +712,229 @@ document.addEventListener('DOMContentLoaded', function() {
         return changed;
     }
 
+    // Records that levels/themes/piece-sets were actually PAID for (never
+    // called for the free "beat the previous level" unlock) — purely to
+    // qualify the player for the VIP leaderboard badge. Additive/permanent,
+    // same merge shape as grantProgress(), and also nudges the server to
+    // refresh the player's leaderboard entry immediately (if they already
+    // have one) so the badge doesn't wait for their next game to appear.
+    function recordPurchase({ levels = [], themes = [], pieceSets = [], botPersonalities = [] } = {}) {
+        let changed = false;
+        levels.forEach((lvl) => {
+            if (!playerProgress.purchasedLevels.includes(lvl)) {
+                playerProgress.purchasedLevels.push(lvl);
+                changed = true;
+            }
+        });
+        themes.forEach((thm) => {
+            if (!playerProgress.purchasedThemes.includes(thm)) {
+                playerProgress.purchasedThemes.push(thm);
+                changed = true;
+            }
+        });
+        pieceSets.forEach((ps) => {
+            if (!playerProgress.purchasedPieceSets.includes(ps)) {
+                playerProgress.purchasedPieceSets.push(ps);
+                changed = true;
+            }
+        });
+        botPersonalities.forEach((bp) => {
+            if (!playerProgress.purchasedBotPersonalities.includes(bp)) {
+                playerProgress.purchasedBotPersonalities.push(bp);
+                changed = true;
+            }
+        });
+        if (changed) {
+            savePlayerProgressToLocalCache();
+            syncProgressToServer();
+            pingVipStatusUpdate();
+        }
+        return changed;
+    }
+
+    // Tells the server to recompute this player's VIP flag on their
+    // existing leaderboard entry right away (Premium purchase or a themed
+    // unlock, not just a new game). Fire-and-forget: harmless if it fails
+    // or if the player has no leaderboard entry yet — the flag will still
+    // be set correctly the next time they submit a score.
+    function pingVipStatusUpdate() {
+        if (!piAccessToken) return;
+        fetch('/.netlify/functions/update-vip-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accessToken: piAccessToken }),
+            signal: AbortSignal.timeout(10000)
+        }).catch((err) => console.error('pingVipStatusUpdate failed (badge will still update next game):', err));
+    }
+
+    // Activates (or extends) Pi Premium after a successful subscription
+    // payment. Cached locally immediately (works offline) and pushed to
+    // the server in the background so the subscription follows the
+    // player's Pi identity across devices, the same way grantProgress()
+    // does for owned levels/themes/piece-sets.
+    // If the player already has active time left on their subscription,
+    // the new period is added on top instead of overwriting it, so
+    // renewing early never costs them any remaining days.
+    function grantPremium(plan) {
+        const days = plan === 'yearly' ? PREMIUM_YEARLY_DAYS : PREMIUM_MONTHLY_DAYS;
+        const msToAdd = days * 24 * 60 * 60 * 1000;
+        const base = isPremiumActive() ? playerProgress.premiumExpiresAt : Date.now();
+        playerProgress.premiumPlan = plan;
+        playerProgress.premiumExpiresAt = base + msToAdd;
+        savePlayerProgressToLocalCache();
+        syncProgressToServer();
+        pingVipStatusUpdate();
+        renderLockState();
+        renderPremiumState();
+    }
+
+    // Keeps the crown button glowing (and the premium modal's status line
+    // up to date) whenever Premium is active. Safe to call anytime.
+    function renderPremiumState() {
+        const premiumBtn = document.getElementById('premium-btn');
+        const active = isPremiumActive();
+        if (premiumBtn) premiumBtn.classList.toggle('premium-active', active);
+
+        // Small day-count badge on the crown icon itself, so the player can
+        // see at a glance — without opening the modal — how long they have
+        // left. Turns to a warning color once it's down to its last 3 days.
+        const daysBadge = document.getElementById('premium-days-badge');
+        if (daysBadge) {
+            if (active) {
+                const daysLeft = getPremiumDaysLeft();
+                daysBadge.textContent = daysLeft;
+                daysBadge.style.display = 'flex';
+                daysBadge.classList.toggle('premium-days-badge-warning', daysLeft <= 3);
+                daysBadge.setAttribute('title', formatPremiumExpiryTitle());
+            } else {
+                daysBadge.style.display = 'none';
+            }
+        }
+
+        const statusText = document.getElementById('premium-status-text');
+        if (statusText) {
+            const t = (typeof i18next !== 'undefined' && i18next.t) ? i18next.t.bind(i18next) : (key, opts) => key;
+            if (active) {
+                const daysLeft = getPremiumDaysLeft();
+                const planKey = playerProgress.premiumPlan === 'yearly' ? 'premiumYearlyLabel' : 'premiumMonthlyLabel';
+                statusText.textContent = t('premiumStatusActive', {
+                    plan: t(planKey),
+                    date: formatPremiumExpiryDate(),
+                    days: daysLeft
+                });
+                statusText.classList.remove('premium-status-expired');
+            } else if (playerProgress.premiumExpiresAt) {
+                // Was subscribed before, but the period has now lapsed —
+                // nudge toward renewing instead of leaving the line blank.
+                statusText.textContent = t('premiumStatusExpired', { date: formatPremiumExpiryDate() });
+                statusText.classList.add('premium-status-expired');
+            } else {
+                statusText.textContent = '';
+                statusText.classList.remove('premium-status-expired');
+            }
+        }
+    }
+
+    // Whole days remaining on the current subscription (minimum 1 while
+    // still active, so "less than a day left" never displays as 0).
+    function getPremiumDaysLeft() {
+        if (!playerProgress.premiumExpiresAt) return 0;
+        return Math.max(1, Math.ceil((playerProgress.premiumExpiresAt - Date.now()) / (24 * 60 * 60 * 1000)));
+    }
+
+    // Formats the subscription's expiry timestamp as a date, e.g.
+    // "August 15, 2026" — used in both the modal status line and the
+    // crown button's tooltip.
+    function formatPremiumExpiryDate() {
+        if (!playerProgress.premiumExpiresAt) return '';
+        try {
+            return new Date(playerProgress.premiumExpiresAt).toLocaleDateString('en-US', {
+                year: 'numeric', month: 'long', day: 'numeric'
+            });
+        } catch (e) {
+            return new Date(playerProgress.premiumExpiresAt).toDateString();
+        }
+    }
+    function formatPremiumExpiryTitle() {
+        const t = (typeof i18next !== 'undefined' && i18next.t) ? i18next.t.bind(i18next) : (key, opts) => key;
+        return t('premiumExpiryTooltip', { date: formatPremiumExpiryDate() });
+    }
+
+    // Proactively nudges the player toward renewing: once per page load,
+    // if Premium is active but has 3 days or fewer left, or if it already
+    // lapsed, shows a one-time alert. Never fires for a player who has
+    // never subscribed (premiumPlan is still null).
+    let premiumExpiryReminderShown = false;
+    function checkPremiumExpiryReminder() {
+        if (premiumExpiryReminderShown || !playerProgress.premiumPlan) return;
+        const t = (typeof i18next !== 'undefined' && i18next.t) ? i18next.t.bind(i18next) : (key, opts) => key;
+        if (isPremiumActive()) {
+            const daysLeft = getPremiumDaysLeft();
+            if (daysLeft <= 3) {
+                premiumExpiryReminderShown = true;
+                showCustomAlert(t('premiumReminderExpiringSoon', { days: daysLeft, date: formatPremiumExpiryDate() }));
+            }
+        } else if (playerProgress.premiumExpiresAt) {
+            premiumExpiryReminderShown = true;
+            showCustomAlert(t('premiumReminderExpired', { date: formatPremiumExpiryDate() }));
+        }
+    }
+
     // Fetches the player's server-saved progress (requires a verified Pi
     // identity) and merges it locally. Safe to call even if the player
     // isn't authenticated yet — it just does nothing in that case.
+    //
+    // Shared by fetchProgressFromServer() and syncProgressToServer() below —
+    // see the BUG FIX note on syncProgressToServer() for why merging
+    // (rather than overwriting) matters for both.
+    function mergeServerProgressIn(serverProgress) {
+        (serverProgress.unlockedLevels || []).forEach((lvl) => {
+            if (!playerProgress.unlockedLevels.includes(lvl)) playerProgress.unlockedLevels.push(lvl);
+        });
+        (serverProgress.unlockedThemes || []).forEach((thm) => {
+            if (!playerProgress.unlockedThemes.includes(thm)) playerProgress.unlockedThemes.push(thm);
+        });
+        (serverProgress.unlockedPieceSets || []).forEach((ps) => {
+            if (!playerProgress.unlockedPieceSets.includes(ps)) playerProgress.unlockedPieceSets.push(ps);
+        });
+        (serverProgress.unlockedBotPersonalities || []).forEach((bp) => {
+            if (!playerProgress.unlockedBotPersonalities.includes(bp)) playerProgress.unlockedBotPersonalities.push(bp);
+        });
+        (serverProgress.purchasedLevels || []).forEach((lvl) => {
+            if (!playerProgress.purchasedLevels.includes(lvl)) playerProgress.purchasedLevels.push(lvl);
+        });
+        (serverProgress.purchasedThemes || []).forEach((thm) => {
+            if (!playerProgress.purchasedThemes.includes(thm)) playerProgress.purchasedThemes.push(thm);
+        });
+        (serverProgress.purchasedPieceSets || []).forEach((ps) => {
+            if (!playerProgress.purchasedPieceSets.includes(ps)) playerProgress.purchasedPieceSets.push(ps);
+        });
+        (serverProgress.purchasedBotPersonalities || []).forEach((bp) => {
+            if (!playerProgress.purchasedBotPersonalities.includes(bp)) playerProgress.purchasedBotPersonalities.push(bp);
+        });
+        (serverProgress.triedLevels || []).forEach((lvl) => {
+            if (!playerProgress.triedLevels.includes(lvl)) playerProgress.triedLevels.push(lvl);
+        });
+        (serverProgress.triedThemes || []).forEach((thm) => {
+            if (!playerProgress.triedThemes.includes(thm)) playerProgress.triedThemes.push(thm);
+        });
+        (serverProgress.triedPieceSets || []).forEach((ps) => {
+            if (!playerProgress.triedPieceSets.includes(ps)) playerProgress.triedPieceSets.push(ps);
+        });
+        (serverProgress.triedBotPersonalities || []).forEach((bp) => {
+            if (!playerProgress.triedBotPersonalities.includes(bp)) playerProgress.triedBotPersonalities.push(bp);
+        });
+        // Pi Premium: adopt the server's expiry only if it's later than
+        // what we already have locally, so an active subscription
+        // (bought here or on another device) is never lost by a
+        // stale/older server record overwriting it.
+        const serverPremiumExpiry = typeof serverProgress.premiumExpiresAt === 'number' ? serverProgress.premiumExpiresAt : null;
+        if (serverPremiumExpiry && (!playerProgress.premiumExpiresAt || serverPremiumExpiry > playerProgress.premiumExpiresAt)) {
+            playerProgress.premiumExpiresAt = serverPremiumExpiry;
+            playerProgress.premiumPlan = serverProgress.premiumPlan || playerProgress.premiumPlan;
+        }
+    }
+
     async function fetchProgressFromServer() {
         if (!piAccessToken) return;
         try {
@@ -461,20 +946,10 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             if (!response.ok) throw new Error('get-progress returned status ' + response.status);
             const serverProgress = await response.json();
-
-            // Merge (union) with whatever we already have locally, so an
-            // unlock made offline/pre-login is never lost.
-            (serverProgress.unlockedLevels || []).forEach((lvl) => {
-                if (!playerProgress.unlockedLevels.includes(lvl)) playerProgress.unlockedLevels.push(lvl);
-            });
-            (serverProgress.unlockedThemes || []).forEach((thm) => {
-                if (!playerProgress.unlockedThemes.includes(thm)) playerProgress.unlockedThemes.push(thm);
-            });
-            (serverProgress.unlockedPieceSets || []).forEach((ps) => {
-                if (!playerProgress.unlockedPieceSets.includes(ps)) playerProgress.unlockedPieceSets.push(ps);
-            });
+            mergeServerProgressIn(serverProgress);
             savePlayerProgressToLocalCache();
             renderLockState();
+            renderPremiumState();
             console.log('Player progress loaded from server:', playerProgress);
         } catch (err) {
             console.error('fetchProgressFromServer failed (using local cache only):', err);
@@ -483,6 +958,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Pushes the current local progress up to the server. Safe to call
     // anytime; silently does nothing if we don't have a verified identity.
+    //
+    // BUG FIX: this used to REPLACE playerProgress wholesale with whatever
+    // save-progress.js returned. That's dangerous for unlockedLevels
+    // specifically: save-progress.js deliberately ignores anything the
+    // client sends for that field (see its own comments — it's a paid-
+    // content gate, not a trial record) and recomputes it server-side from
+    // purchases + earned levels. A level just earned by winning is granted
+    // by submit-score.js as a *separate* request that may not have landed
+    // yet (or may be in flight concurrently) when this call's response
+    // comes back — so the old wholesale-replace could, and did, wipe a
+    // just-earned unlock back out of local state (and localStorage) within
+    // moments of granting it. Merging here, the same safe way
+    // fetchProgressFromServer() already does, means this call can only
+    // ever ADD confirmed server state, never remove an unlock the player
+    // already has locally.
     async function syncProgressToServer() {
         if (!piAccessToken) return;
         try {
@@ -494,16 +984,36 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             if (!response.ok) throw new Error('save-progress returned status ' + response.status);
             const savedProgress = await response.json();
-            // Adopt the server's merged result as the new source of truth.
-            playerProgress = {
-                unlockedLevels: savedProgress.unlockedLevels || playerProgress.unlockedLevels,
-                unlockedThemes: savedProgress.unlockedThemes || playerProgress.unlockedThemes,
-                unlockedPieceSets: savedProgress.unlockedPieceSets || playerProgress.unlockedPieceSets
-            };
+            mergeServerProgressIn(savedProgress);
             savePlayerProgressToLocalCache();
             renderLockState();
+            renderPremiumState();
         } catch (err) {
             console.error('syncProgressToServer failed (progress stays cached locally for now):', err);
+        }
+    }
+
+    // Requests a fresh signed game token from the server for a game about
+    // to start at the given difficulty (see start-game.js). This token is
+    // what submit-score.js uses to determine difficulty/timing at the end
+    // of the game — the client's own report of the result is only ever
+    // trusted alongside a valid token for THIS specific game.
+    async function requestGameToken(difficulty) {
+        currentGameToken = null;
+        if (!piAccessToken) return; // not signed in — nothing to credit anyway
+        try {
+            const response = await fetch('/.netlify/functions/start-game', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accessToken: piAccessToken, difficulty }),
+                signal: AbortSignal.timeout(10000)
+            });
+            if (!response.ok) throw new Error('start-game returned status ' + response.status);
+            const data = await response.json();
+            currentGameToken = data.gameToken || null;
+        } catch (err) {
+            console.error('requestGameToken failed (this game will not be eligible for the leaderboard):', err);
+            currentGameToken = null;
         }
     }
 
@@ -514,10 +1024,41 @@ document.addEventListener('DOMContentLoaded', function() {
     async function initializePiIdentityAndProgress() {
         loadPlayerProgressFromLocalCache(); // instant, works offline
         renderLockState();
+        renderPremiumState();
         fetchPiUsdPrice().catch(() => {}); // warm the price cache in the background; never blocks init
         try {
-            if (typeof Pi === 'undefined') return; // not running inside Pi Browser
-            const auth = await Pi.authenticate(['payments'], resolveIncompletePayment);
+            // Must await this BEFORE checking `typeof Pi` — the SDK now
+            // loads dynamically with retries (see index.html), so Pi can
+            // still be legitimately undefined here for a couple of
+            // seconds while a retry is in flight, not just when it's
+            // permanently unavailable. Checking too early was returning
+            // early (silently skipping sign-in) even on runs that would
+            // have succeeded a moment later.
+            if (window.piInitPromise) {
+                try {
+                    await window.piInitPromise;
+                } catch (err) {
+                    return; // SDK truly unavailable this session (already logged in index.html)
+                }
+            }
+            if (typeof Pi === 'undefined') return; // Pi SDK script didn't load
+            // NOTE: intentionally NOT gating this on isPiBrowserEnvironment().
+            // That check reads navigator.userAgent, and on a cold load inside
+            // Pi Browser's webview the "PiBrowser" token isn't always present
+            // yet (it can show up only after a reload), which was blocking
+            // real Pi Browser users from ever authenticating — the exact
+            // "works after refresh" symptom this fixes. Pi.authenticate()
+            // itself already fails/hangs harmlessly outside Pi Browser (no
+            // native message bridge), so it's a safe, more reliable gate on
+            // its own. isPiBrowserEnvironment() is still used as an extra
+            // check specifically around free-trial grants further below.
+            // Race against a 15s timeout so a stalled connection to Pi's
+            // auth servers can't leave this hanging forever — it just
+            // falls back to local-only progress (caught below) instead.
+            const auth = await Promise.race([
+                Pi.authenticate(['username', 'payments'], resolveIncompletePayment),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Pi.authenticate timed out after 15s')), 15000))
+            ]);
             if (auth && auth.accessToken && auth.user) {
                 piAccessToken = auth.accessToken;
                 piUserUid = auth.user.uid;
@@ -527,6 +1068,11 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (err) {
             console.error('Pi identity init failed (continuing with local progress only):', err);
+        } finally {
+            // Runs whether or not Pi auth/server sync succeeded, using
+            // whatever the most up-to-date progress we managed to get is
+            // (server-synced if available, local cache otherwise).
+            checkPremiumExpiryReminder();
         }
     }
 
@@ -536,7 +1082,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // outside Pi Browser, or the player declined the permission prompt).
     function updatePlayerNameDisplay() {
         const el = document.getElementById('player-text');
-        if (el) el.innerHTML = piUsername || i18next.t('whiteLabel');
+        if (el) el.textContent = piUsername || i18next.t('whiteLabel');
     }
    
     // Statistics variables
@@ -639,6 +1185,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     chooseTheme: "Choose Your Board Theme",
                     selectLanguage: "Select Your Language",
                     chooseDifficulty: "Choose Difficulty Level",
+                    chooseBotPersonality: "Choose Your Opponent",
                     whitesTurn: "White's Turn",
                     blacksTurn: "Bot AI",
                     whiteLabel: "Guest",
@@ -646,37 +1193,34 @@ document.addEventListener('DOMContentLoaded', function() {
                     hint: "Hint",
                     undo: "Undo",
                     threats: "Threats",
-                    extraTime: "Extra Time",
+                    extraTime: "+ Time",
                     refill: "Refill",
                     help: "Help",
-                    exportPGN: "Export PGN",
-                    importPGN: "Import PGN",
-                    timeLeft: "Time Left"
-                }
-            },
-            ar: {
-                translation: {
-                    welcomeTitle: "شطرنج باي",
-                    welcomeSubtitle: "عقلك هو الخوارزمية. اللوحة هي مجالك. العب، احسب, انتصر.",
-                    chooseTheme: "اختر ثيم اللوحة",
-                    selectLanguage: "اختر لغتك",
-                    chooseDifficulty: "اختر مستوى الصعوبة",
-                    whitesTurn: "دور الأبيض",
-                    blacksTurn: "بوت AI",
-                    whiteLabel: "ضيف",
-                    gameInProgress: "اللعبة جارية",
-                    hint: "تلميح",
-                    undo: "تراجع",
-                    threats: "تهديدات",
-                    extraTime: "وقت إضافي",
-                    refill: "إعادة تعبئة",
-                    help: "مساعدة",
-                    exportPGN: "تصدير PGN",
-                    importPGN: "استيراد PGN",
-                    timeLeft: "الوقت المتبقي"
+                    exportPGN: "Exp PGN",
+                    importPGN: "Imp PGN",
+                    timeLeft: "Time Left",
+                    premiumAriaLabel: "Chess Pi Premium subscription",
+                    premiumTitle: "Chess Pi Premium",
+                    premiumDesc: "Unlock every level, board theme, piece set, and bot personality for as long as your subscription is active.",
+                    premiumMonthlyLabel: "Monthly",
+                    premiumYearlyLabel: "Yearly",
+                    premiumBestValue: "Best Value",
+                    premiumMonthlySub: "$0.50 / month",
+                    premiumYearlySub: "$4.00 / year",
+                    premiumSavings: "Save ${{amount}}/year ({{percent}}% off the monthly price)",
+                    premiumFineprint: "Payments are one-time Pi charges that activate Premium for the plan's period; renew any time before or after it ends to keep your access uninterrupted.",
+                    premiumStatusActive: "{{plan}} Premium active — expires {{date}} ({{days}} day(s) left). Subscribing again adds to this.",
+                    premiumStatusExpired: "Your Premium subscription expired on {{date}}. Subscribe again to unlock everything.",
+                    premiumExpiryTooltip: "Chess Pi Premium expires {{date}}",
+                    premiumReminderExpiringSoon: "Your Chess Pi Premium subscription expires in {{days}} day(s), on {{date}}. Renew now to avoid losing access.",
+                    premiumReminderExpired: "Your Chess Pi Premium subscription expired on {{date}}. Tap the crown icon to renew and unlock everything again.",
+                    vipBadgeTooltip: "Pi VIP — Premium subscriber or has purchased premium content",
+                    freeTrialUsed: "Enjoy your one-time free trial of {{name}}! It'll lock again after this — unlock it permanently anytime with Pi.",
+                    alreadyTriedNote: "You already used your free trial for this — unlock it permanently with Pi to keep using it."
                 }
             }
-            // Add more languages: fr, es, zh, ru with similar structures
+            // English only. To add another language back in the future,
+            // add its own top-level key here (e.g. fr: { translation: {...} }).
         }
     }).then(() => {
         updateTranslations();
@@ -689,6 +1233,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (q('.welcome-title')) q('.welcome-title').innerHTML = i18next.t('welcomeTitle');
             if (q('.welcome-subtitle')) q('.welcome-subtitle').innerHTML = i18next.t('welcomeSubtitle');
             if (q('.theme-page .page-title')) q('.theme-page .page-title').innerHTML = i18next.t('chooseTheme');
+            if (q('.bot-page .page-title')) q('.bot-page .page-title').innerHTML = i18next.t('chooseBotPersonality');
             if (q('.difficulty-page .page-title')) q('.difficulty-page .page-title').innerHTML = i18next.t('chooseDifficulty');
             if (document.getElementById('bot-text')) document.getElementById('bot-text').innerHTML = i18next.t('blacksTurn');
             if (document.getElementById('player-text')) updatePlayerNameDisplay();
@@ -705,12 +1250,21 @@ document.addEventListener('DOMContentLoaded', function() {
             setSpan('#export-pgn-btn span', 'exportPGN');
             setSpan('#import-pgn-btn span', 'importPGN');
 
-            // Update modals and other texts as needed
-            if (userSettings.language === 'ar') {
-                document.body.dir = 'rtl';
-            } else {
-                document.body.dir = 'ltr';
-            }
+            // Pi Premium button + modal
+            const premiumBtnEl = document.getElementById('premium-btn');
+            if (premiumBtnEl) premiumBtnEl.setAttribute('aria-label', i18next.t('premiumAriaLabel'));
+            if (document.getElementById('premium-modal-title')) document.getElementById('premium-modal-title').textContent = i18next.t('premiumTitle');
+            if (document.getElementById('premium-modal-desc')) document.getElementById('premium-modal-desc').textContent = i18next.t('premiumDesc');
+            if (q('#premium-monthly-btn .premium-plan-name')) q('#premium-monthly-btn .premium-plan-name').textContent = i18next.t('premiumMonthlyLabel');
+            if (q('#premium-yearly-btn .premium-plan-name')) q('#premium-yearly-btn .premium-plan-name').textContent = i18next.t('premiumYearlyLabel');
+            if (document.getElementById('premium-best-badge')) document.getElementById('premium-best-badge').textContent = i18next.t('premiumBestValue');
+            if (document.getElementById('premium-monthly-sub')) document.getElementById('premium-monthly-sub').textContent = i18next.t('premiumMonthlySub');
+            if (document.getElementById('premium-yearly-sub')) document.getElementById('premium-yearly-sub').textContent = i18next.t('premiumYearlySub');
+            if (q('.premium-fineprint')) q('.premium-fineprint').textContent = i18next.t('premiumFineprint');
+            renderPremiumState();
+
+            // English only — always left-to-right.
+            document.body.dir = 'ltr';
         } catch (e) {
             console.error('updateTranslations error:', e);
         }
@@ -745,8 +1299,23 @@ document.addEventListener('DOMContentLoaded', function() {
             const clickedTheme = this.getAttribute('data-theme');
 
             if (this.classList.contains('locked')) {
-                showUnlockModal('theme', clickedTheme);
-                return;
+                // The one-time free trial can only be tracked reliably for
+                // a verified Pi identity (triedThemes is synced server-side
+                // — see fetchProgressFromServer/syncProgressToServer).
+                // Without piAccessToken (outside Pi Browser, or Pi login
+                // declined) there's no way to remember "already tried"
+                // across a cleared localStorage/cookies, so the trial would
+                // be repeatable indefinitely. Go straight to the paywall
+                // instead of offering a trial we can't actually enforce.
+                if (!piAccessToken || !isPiBrowserEnvironment() || hasTriedTheme(clickedTheme)) {
+                    showUnlockModal('theme', clickedTheme);
+                    return;
+                }
+                // First time on this locked theme: spend its one-time free
+                // trial and let it through below instead of paywalling it.
+                markTried('theme', clickedTheme);
+                activeTrialTheme = clickedTheme;
+                showTrialToast(UNLOCK_DISPLAY_NAMES[clickedTheme] || clickedTheme);
             }
 
             this.classList.add('clicked');
@@ -771,8 +1340,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const clickedPieceSet = this.getAttribute('data-piece-set');
 
             if (this.classList.contains('locked')) {
-                showUnlockModal('pieceset', clickedPieceSet);
-                return;
+                // See the matching comment in the theme-selection handler
+                // above — the free trial requires a verified Pi identity to
+                // be enforceable at all.
+                if (!piAccessToken || !isPiBrowserEnvironment() || hasTriedPieceSet(clickedPieceSet)) {
+                    showUnlockModal('pieceset', clickedPieceSet);
+                    return;
+                }
+                // First time on this locked piece set: spend its one-time
+                // free trial and let it through below instead of paywalling it.
+                markTried('pieceset', clickedPieceSet);
+                activeTrialPieceSet = clickedPieceSet;
+                showTrialToast(UNLOCK_DISPLAY_NAMES[clickedPieceSet] || clickedPieceSet);
             }
 
             this.classList.add('clicked');
@@ -789,7 +1368,44 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 500);
         });
     });
-   
+
+    // Setup bot personality selection (new page, inserted between piece
+    // set selection and difficulty selection — see index.html's bot-page).
+    const botPersonalityOptions = document.querySelectorAll('.bot-page .option-card');
+    botPersonalityOptions.forEach(option => {
+        option.addEventListener('click', function() {
+            const clickedBot = this.getAttribute('data-bot-personality');
+
+            if (this.classList.contains('locked')) {
+                // Same one-time free trial pattern as themes/piece sets/
+                // levels above — requires a verified Pi identity to be
+                // enforceable at all.
+                if (!piAccessToken || !isPiBrowserEnvironment() || hasTriedBotPersonality(clickedBot)) {
+                    showUnlockModal('bot', clickedBot);
+                    return;
+                }
+                // First time on this locked bot personality: spend its
+                // one-time free trial and let it through below instead of
+                // paywalling it.
+                markTried('bot', clickedBot);
+                activeTrialBotPersonality = clickedBot;
+                showTrialToast(UNLOCK_DISPLAY_NAMES[clickedBot] || clickedBot);
+            }
+
+            this.classList.add('clicked');
+            setTimeout(() => {
+                this.classList.remove('clicked');
+            }, 300);
+            botPersonalityOptions.forEach(opt => opt.classList.remove('selected'));
+            this.classList.add('selected');
+            userSettings.botPersonality = clickedBot;
+            updateCurrentSettings();
+            setTimeout(() => {
+                switchPage(4);
+            }, 500);
+        });
+    });
+
     // Setup difficulty selection
     const difficultyOptions = document.querySelectorAll('.difficulty-page .option-card');
     difficultyOptions.forEach(option => {
@@ -797,8 +1413,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const clickedDifficulty = this.getAttribute('data-difficulty');
 
             if (this.classList.contains('locked')) {
-                showUnlockModal('level', clickedDifficulty);
-                return;
+                // See the matching comment in the theme-selection handler
+                // above — the free trial requires a verified Pi identity to
+                // be enforceable at all.
+                if (!piAccessToken || !isPiBrowserEnvironment() || hasTriedLevel(clickedDifficulty)) {
+                    showUnlockModal('level', clickedDifficulty);
+                    return;
+                }
+                // First time on this locked difficulty: spend its one-time
+                // free trial and let it through below instead of paywalling it.
+                markTried('level', clickedDifficulty);
+                activeTrialLevel = clickedDifficulty;
+                showTrialToast(UNLOCK_DISPLAY_NAMES[clickedDifficulty] || clickedDifficulty);
             }
 
             this.classList.add('clicked');
@@ -824,7 +1450,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             setTimeout(() => {
-                switchPage(4);
+                switchPage(5);
             }, 500);
         });
     });
@@ -874,10 +1500,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 baseExtraTime = 1;
                 break;
             case 'expert':
-                baseHints = 2;
-                baseUndos = 2;
-                baseThreats = 2;
-                baseExtraTime = 2;
+                baseHints = 1;
+                baseUndos = 1;
+                baseThreats = 1;
+                baseExtraTime = 1;
                 break;
             default:
                 baseHints = 1;
@@ -925,7 +1551,17 @@ document.addEventListener('DOMContentLoaded', function() {
     ];
 
     let promoMessageTimer = null;
+    let promoMessageClearTimer = null;
     function showPromoMessage(messages) {
+        // If the "Added X minute!" (or any other) custom alert is on
+        // screen right now, don't show the toast underneath/behind it —
+        // stash it and let dismissCustomAlertModal() (above) show it the
+        // moment the player closes that alert instead.
+        const alertModal = document.getElementById('custom-alert-modal');
+        if (alertModal && alertModal.style.display === 'block') {
+            pendingPromoMessages = messages;
+            return;
+        }
         const promoEl = document.getElementById('promo-message');
         if (!promoEl) return;
 
@@ -933,11 +1569,29 @@ document.addEventListener('DOMContentLoaded', function() {
         promoEl.textContent = text;
 
         // Restart the visible state/timer even if one is already showing.
+        // Also cancel any pending "clear the text" from a previous message
+        // fading out — otherwise it could wipe out THIS new text a moment
+        // after we just set it.
         if (promoMessageTimer) clearTimeout(promoMessageTimer);
+        if (promoMessageClearTimer) clearTimeout(promoMessageClearTimer);
         promoEl.classList.add('visible');
         promoMessageTimer = setTimeout(() => {
             promoEl.classList.remove('visible');
             promoMessageTimer = null;
+            // Only actually empty the element once its fade-out transition
+            // has finished (matches the 0.4s in .promo-message's CSS
+            // transition, plus a small buffer). Emptying it collapses its
+            // width to zero, freeing up the space next to the bot name
+            // instead of permanently reserving it — without this, the
+            // element kept its previous text (and therefore its width)
+            // forever after the first time a promo message ever appeared,
+            // which is what was squeezing "Aggressive Attacker" (and any
+            // other bot personality name) onto two lines for the rest of
+            // the game even once the message itself was gone.
+            promoMessageClearTimer = setTimeout(() => {
+                promoEl.textContent = '';
+                promoMessageClearTimer = null;
+            }, 450);
         }, 5000);
     }
    
@@ -987,15 +1641,13 @@ document.addEventListener('DOMContentLoaded', function() {
         checkRefillButtonState();
     }
    
-    // Pi SDK Initialization
-    try {
-        if (typeof Pi !== 'undefined') {
-            Pi.init({ version: "2.0", sandbox: false }); // Change sandbox to false for production
-        } else {
-            console.error('Pi SDK script not loaded — payment features will be unavailable.');
-        }
-    } catch (e) {
-        console.error('Pi.init failed:', e);
+    // Pi SDK availability check only — Pi.init() itself already runs once,
+    // synchronously, in index.html right after the SDK script tag (before
+    // this file even loads). Calling Pi.init() a second time here was
+    // redundant and risked re-initializing the SDK's internal session state
+    // right before the authenticate() call below runs, so it's been removed.
+    if (typeof Pi === 'undefined') {
+        console.error('Pi SDK script not loaded — payment features will be unavailable.');
     }
 
     // Start syncing the player's account-linked progress in the background.
@@ -1051,13 +1703,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 await cancelPayment();
             } catch (err2) {
                 console.error('Fallback cancel also failed:', err2);
-                showCustomAlert('في عملية دفع سابقة عالقة وما قدرنا نحلّها تلقائياً. جرب تسكّر التطبيق وتفتحه من جديد، أو حاول لاحقاً.');
+                showCustomAlert('There\'s a stuck payment from earlier that we couldn\'t resolve automatically. Try closing and reopening the app, or try again later.');
             }
         }
     }
 
     async function authenticate() {
-        const scopes = ['payments'];
+        // Same fix as initializePiIdentityAndProgress(): must wait for
+        // Pi.init() to resolve before calling Pi.authenticate(), or it can
+        // throw "Pi Network SDK was not initialized" intermittently.
+        if (window.piInitPromise) await window.piInitPromise;
+        const scopes = ['username', 'payments'];
         const auth = await Pi.authenticate(scopes, resolveIncompletePayment);
         return auth;
     }
@@ -1070,7 +1726,9 @@ document.addEventListener('DOMContentLoaded', function() {
         [
             document.getElementById('refill-btn'),
             document.getElementById('unlock-pay-btn'),
-            document.getElementById('unlock-all-btn')
+            document.getElementById('unlock-all-btn'),
+            document.getElementById('premium-monthly-btn'),
+            document.getElementById('premium-yearly-btn')
         ].forEach(el => {
             if (!el) return;
             el.style.pointerEvents = busy ? 'none' : '';
@@ -1188,9 +1846,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const UNLOCK_DISPLAY_NAMES = {
         medium: 'Medium', hard: 'Hard', expert: 'Expert',
         green: 'Green', pink: 'Pink', blue: 'Blue',
-        wood: 'Wood', glass: 'Glass', marble: 'Marble'
+        wood: 'Wood', glass: 'Glass', marble: 'Marble',
+        defensive: 'Solid Defender', endgame: 'Endgame Technician', trickster: 'Gambit Trickster'
     };
-    let pendingUnlock = null; // { type: 'level' | 'theme', name: string }
+    let pendingUnlock = null; // { type: 'level' | 'theme' | 'pieceset' | 'bot', name: string }
 
     // Formats a Pi amount for display: up to 4 decimal places, trimmed of
     // trailing zeros (e.g. 1.75, 0.4286, 3).
@@ -1201,11 +1860,14 @@ document.addEventListener('DOMContentLoaded', function() {
     async function showUnlockModal(type, name) {
         pendingUnlock = { type, name };
         const modal = document.getElementById('unlock-modal');
+        const badge = document.getElementById('unlock-type-badge');
         const title = document.getElementById('unlock-modal-title');
         const desc = document.getElementById('unlock-modal-desc');
         const priceText = document.getElementById('unlock-price-text');
         const unlockAllBtn = document.getElementById('unlock-all-btn');
         const unlockAllText = document.getElementById('unlock-all-text');
+        const triedNoteEl = document.getElementById('unlock-tried-note');
+        const triedNoteTextEl = document.getElementById('unlock-tried-note-text');
         if (!modal || !title || !desc || !priceText) return;
 
         // Make sure we have a reasonably fresh PI/USD rate before showing
@@ -1213,30 +1875,47 @@ document.addEventListener('DOMContentLoaded', function() {
         // usually instant).
         await fetchPiUsdPrice();
 
+        // Hide the "already tried" note by default; only the single-item
+        // branches below turn it back on, and only when it applies.
+        if (triedNoteEl) triedNoteEl.classList.add('hidden');
+        if (badge) badge.textContent = 'Bundle';
+
         let price = getUnlockPricePi();
         if (type === 'all-levels') {
             const remaining = getRemainingLockedLevels();
             price = getBundlePricePi(remaining.length);
             title.textContent = 'Unlock All Levels';
-            desc.textContent = 'Unlock Medium, Hard, and Expert difficulty all at once with Pi.';
+            desc.textContent = 'Get Medium, Hard, and Expert difficulty in one purchase.';
             if (unlockAllBtn) unlockAllBtn.classList.add('hidden');
         } else if (type === 'all-themes') {
             const remaining = getRemainingLockedThemes();
             price = getBundlePricePi(remaining.length);
             title.textContent = 'Unlock All Themes';
-            desc.textContent = 'Unlock Green, Pink, and Blue board themes all at once with Pi.';
+            desc.textContent = 'Get the Green, Pink, and Blue board themes in one purchase.';
             if (unlockAllBtn) unlockAllBtn.classList.add('hidden');
         } else if (type === 'all-piecesets') {
             const remaining = getRemainingLockedPieceSets();
             price = getBundlePricePi(remaining.length);
             title.textContent = 'Unlock All Piece Sets';
-            desc.textContent = 'Unlock Wood, Glass, and Marble piece sets all at once with Pi.';
+            desc.textContent = 'Get the Wood, Glass, and Marble piece sets in one purchase.';
+            if (unlockAllBtn) unlockAllBtn.classList.add('hidden');
+        } else if (type === 'all-bots') {
+            const remaining = getRemainingLockedBotPersonalities();
+            price = getBundlePricePi(remaining.length);
+            title.textContent = 'Unlock All Bot Personalities';
+            desc.textContent = 'Get the Solid Defender, Endgame Technician, and Gambit Trickster bots in one purchase.';
             if (unlockAllBtn) unlockAllBtn.classList.add('hidden');
         } else {
             const displayName = UNLOCK_DISPLAY_NAMES[name] || name;
+            const triedNote = (typeof i18next !== 'undefined' && i18next.t) ? i18next.t('alreadyTriedNote') : 'You already used your free trial for this. Unlock it with Pi to keep using it.';
             if (type === 'level') {
-                title.textContent = `${displayName} Difficulty is Locked`;
-                desc.textContent = `Beat the previous level to unlock ${displayName} for free, or unlock it instantly with Pi.`;
+                if (badge) badge.textContent = 'Difficulty Level';
+                title.textContent = displayName;
+                desc.textContent = `Beat the previous level to unlock it free, or unlock it now with Pi.`;
+                if (hasTriedLevel(name) && triedNoteEl && triedNoteTextEl) {
+                    triedNoteTextEl.textContent = triedNote;
+                    triedNoteEl.classList.remove('hidden');
+                }
                 const remaining = getRemainingLockedLevels();
                 if (unlockAllBtn) {
                     // Only worth offering "unlock the rest" when there's
@@ -1249,8 +1928,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     unlockAllText.textContent = `Unlock Remaining ${remaining.length} Levels — ${formatPiAmount(bundlePrice)} π`;
                 }
             } else if (type === 'theme') {
-                title.textContent = `${displayName} Theme is Locked`;
-                desc.textContent = `Unlock the ${displayName} board theme instantly with Pi.`;
+                if (badge) badge.textContent = 'Board Theme';
+                title.textContent = displayName;
+                desc.textContent = `Unlock this board theme instantly with Pi.`;
+                if (hasTriedTheme(name) && triedNoteEl && triedNoteTextEl) {
+                    triedNoteTextEl.textContent = triedNote;
+                    triedNoteEl.classList.remove('hidden');
+                }
                 const remaining = getRemainingLockedThemes();
                 if (unlockAllBtn) {
                     unlockAllBtn.classList.toggle('hidden', remaining.length <= 1);
@@ -1260,9 +1944,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     const bundlePrice = getBundlePricePi(remaining.length);
                     unlockAllText.textContent = `Unlock Remaining ${remaining.length} Themes — ${formatPiAmount(bundlePrice)} π`;
                 }
-            } else {
-                title.textContent = `${displayName} Piece Set is Locked`;
-                desc.textContent = `Unlock the ${displayName} piece set instantly with Pi. It works with any board theme.`;
+            } else if (type === 'pieceset') {
+                if (badge) badge.textContent = 'Piece Set';
+                title.textContent = displayName;
+                desc.textContent = `Unlock this piece set instantly with Pi. Works with any board theme.`;
+                if (hasTriedPieceSet(name) && triedNoteEl && triedNoteTextEl) {
+                    triedNoteTextEl.textContent = triedNote;
+                    triedNoteEl.classList.remove('hidden');
+                }
                 const remaining = getRemainingLockedPieceSets();
                 if (unlockAllBtn) {
                     unlockAllBtn.classList.toggle('hidden', remaining.length <= 1);
@@ -1272,9 +1961,30 @@ document.addEventListener('DOMContentLoaded', function() {
                     const bundlePrice = getBundlePricePi(remaining.length);
                     unlockAllText.textContent = `Unlock Remaining ${remaining.length} Piece Sets — ${formatPiAmount(bundlePrice)} π`;
                 }
+            } else {
+                // type === 'bot'
+                if (badge) badge.textContent = 'Bot Personality';
+                title.textContent = displayName;
+                const botMeta = BOT_PERSONALITIES[name];
+                desc.textContent = botMeta
+                    ? `${botMeta.desc} Unlock this bot instantly with Pi.`
+                    : `Unlock this bot personality instantly with Pi.`;
+                if (hasTriedBotPersonality(name) && triedNoteEl && triedNoteTextEl) {
+                    triedNoteTextEl.textContent = triedNote;
+                    triedNoteEl.classList.remove('hidden');
+                }
+                const remaining = getRemainingLockedBotPersonalities();
+                if (unlockAllBtn) {
+                    unlockAllBtn.classList.toggle('hidden', remaining.length <= 1);
+                    unlockAllBtn.dataset.bundleType = 'all-bots';
+                }
+                if (unlockAllText) {
+                    const bundlePrice = getBundlePricePi(remaining.length);
+                    unlockAllText.textContent = `Unlock Remaining ${remaining.length} Bot Personalities — ${formatPiAmount(bundlePrice)} π`;
+                }
             }
         }
-        priceText.textContent = `Unlock for ${formatPiAmount(price)} \u03C0`;
+        priceText.textContent = `${formatPiAmount(price)} \u03C0`;
 
         modal.style.display = 'block';
     }
@@ -1284,7 +1994,7 @@ document.addEventListener('DOMContentLoaded', function() {
         isProcessingPayment = true;
         setPaymentButtonsBusy(true);
         const { type, name } = pendingUnlock;
-        const isBundle = type === 'all-levels' || type === 'all-themes' || type === 'all-piecesets';
+        const isBundle = type === 'all-levels' || type === 'all-themes' || type === 'all-piecesets' || type === 'all-bots';
 
         // Refresh the Pi/USD rate right before charging so the amount
         // reflects the current market price, not whatever was cached when
@@ -1298,6 +2008,7 @@ document.addEventListener('DOMContentLoaded', function() {
         let levelsToGrant = [];
         let themesToGrant = [];
         let pieceSetsToGrant = [];
+        let botPersonalitiesToGrant = [];
         if (type === 'all-levels') {
             levelsToGrant = getRemainingLockedLevels();
             price = getBundlePricePi(levelsToGrant.length);
@@ -1307,22 +2018,28 @@ document.addEventListener('DOMContentLoaded', function() {
         } else if (type === 'all-piecesets') {
             pieceSetsToGrant = getRemainingLockedPieceSets();
             price = getBundlePricePi(pieceSetsToGrant.length);
+        } else if (type === 'all-bots') {
+            botPersonalitiesToGrant = getRemainingLockedBotPersonalities();
+            price = getBundlePricePi(botPersonalitiesToGrant.length);
         } else if (type === 'level') {
             levelsToGrant = [name];
         } else if (type === 'theme') {
             themesToGrant = [name];
         } else if (type === 'pieceset') {
             pieceSetsToGrant = [name];
+        } else if (type === 'bot') {
+            botPersonalitiesToGrant = [name];
         }
 
         // Nothing left to actually unlock (e.g. the player unlocked the
         // rest in another tab/device since this modal was opened) — bail
         // out instead of charging for an empty bundle.
-        if (isBundle && levelsToGrant.length === 0 && themesToGrant.length === 0 && pieceSetsToGrant.length === 0) {
+        if (isBundle && levelsToGrant.length === 0 && themesToGrant.length === 0 && pieceSetsToGrant.length === 0 && botPersonalitiesToGrant.length === 0) {
             isProcessingPayment = false;
             setPaymentButtonsBusy(false);
             const modal = document.getElementById('unlock-modal');
             if (modal) modal.style.display = 'none';
+            resumeTimer(); // no-op unless this modal was opened mid-game (e.g. from the live board-settings switcher)
             showCustomAlert('Everything in that category is already unlocked!');
             return;
         }
@@ -1330,13 +2047,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const displayName = isBundle
             ? (type === 'all-levels' ? `${levelsToGrant.length} Remaining Level(s)`
                 : type === 'all-themes' ? `${themesToGrant.length} Remaining Theme(s)`
-                : `${pieceSetsToGrant.length} Remaining Piece Set(s)`)
+                : type === 'all-piecesets' ? `${pieceSetsToGrant.length} Remaining Piece Set(s)`
+                : `${botPersonalitiesToGrant.length} Remaining Bot Personality(ies)`)
             : (UNLOCK_DISPLAY_NAMES[name] || name);
 
         try {
             await authenticate();
 
-            const itemCount = isBundle ? (levelsToGrant.length || themesToGrant.length || pieceSetsToGrant.length) : 1;
+            const itemCount = isBundle ? (levelsToGrant.length || themesToGrant.length || pieceSetsToGrant.length || botPersonalitiesToGrant.length) : 1;
             const usdCharged = isBundle
                 ? UNLOCK_PRICE_USD * itemCount * (1 - BUNDLE_DISCOUNT_RATE)
                 : UNLOCK_PRICE_USD;
@@ -1376,9 +2094,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         if (levelsToGrant.length) grantProgress({ levels: levelsToGrant });
                         if (themesToGrant.length) grantProgress({ themes: themesToGrant });
                         if (pieceSetsToGrant.length) grantProgress({ pieceSets: pieceSetsToGrant });
+                        if (botPersonalitiesToGrant.length) grantProgress({ botPersonalities: botPersonalitiesToGrant });
+                        recordPurchase({ levels: levelsToGrant, themes: themesToGrant, pieceSets: pieceSetsToGrant, botPersonalities: botPersonalitiesToGrant });
 
                         const modal = document.getElementById('unlock-modal');
                         if (modal) modal.style.display = 'none';
+                        resumeTimer(); // no-op unless this modal was opened mid-game (e.g. from the live board-settings switcher)
                         showCustomAlert(`${displayName} unlocked! Enjoy.`);
                     } catch (error) {
                         console.error('Unlock completion error:', error);
@@ -1435,16 +2156,175 @@ document.addEventListener('DOMContentLoaded', function() {
         unlockCancelBtnEl.addEventListener('click', function() {
             const modal = document.getElementById('unlock-modal');
             if (modal) modal.style.display = 'none';
+            resumeTimer(); // no-op unless this modal was opened mid-game (e.g. from the live board-settings switcher)
             pendingUnlock = null;
         });
     }
+
+    // ===================================================================
+    // PI PREMIUM MODAL (subscribing to unlock everything at once, monthly
+    // or yearly). Separate feature from the Refill top-up above — Refill
+    // stays a flat, non-discounted per-use price; Premium is a recurring
+    // access pass priced and displayed independently.
+    // ===================================================================
+    let pendingPremiumPlan = null; // 'monthly' | 'yearly'
+
+    // Populates the modal with live Pi prices and the yearly plan's
+    // savings, then shows it. Safe to call anytime; always recomputes.
+    async function showPremiumModal() {
+        const modal = document.getElementById('premium-modal');
+        const monthlyPriceEl = document.getElementById('premium-monthly-price');
+        const yearlyPriceEl = document.getElementById('premium-yearly-price');
+        const savingsEl = document.getElementById('premium-savings-text');
+        if (!modal || !monthlyPriceEl || !yearlyPriceEl) return;
+
+        // Fresh-ish rate (uses the cache if still recent, so this is
+        // usually instant) so the displayed Pi amounts are trustworthy.
+        await fetchPiUsdPrice();
+
+        monthlyPriceEl.textContent = `${formatPiAmount(getPremiumMonthlyPricePi())} π`;
+        yearlyPriceEl.textContent = `${formatPiAmount(getPremiumYearlyPricePi())} π`;
+        if (savingsEl) {
+            const amount = PREMIUM_YEARLY_SAVINGS_USD.toFixed(2);
+            savingsEl.textContent = (typeof i18next !== 'undefined' && i18next.t)
+                ? i18next.t('premiumSavings', { amount, percent: PREMIUM_YEARLY_SAVINGS_PERCENT })
+                : `Save $${amount}/year (${PREMIUM_YEARLY_SAVINGS_PERCENT}% off the monthly price)`;
+        }
+        renderPremiumState();
+        modal.style.display = 'block';
+    }
+
+    async function processPremiumPayment() {
+        if (!pendingPremiumPlan || isProcessingPayment) return;
+        isProcessingPayment = true;
+        setPaymentButtonsBusy(true);
+        const plan = pendingPremiumPlan;
+
+        // Refresh the Pi/USD rate right before charging so the amount
+        // reflects the current market price, not whatever was cached when
+        // the modal first opened.
+        await fetchPiUsdPrice(true);
+
+        const price = plan === 'yearly' ? getPremiumYearlyPricePi() : getPremiumMonthlyPricePi();
+        const usdCharged = plan === 'yearly' ? PREMIUM_YEARLY_USD : PREMIUM_MONTHLY_USD;
+        const planLabel = plan === 'yearly' ? 'Yearly' : 'Monthly';
+
+        try {
+            await authenticate();
+
+            const paymentData = {
+                amount: price,
+                memo: `Chess Pi Premium — ${planLabel} subscription`,
+                metadata: { productId: `premium_${plan}`, usdPrice: usdCharged }
+            };
+
+            const callbacks = {
+                onReadyForServerApproval: async function(paymentId) {
+                    console.log('Premium onReadyForServerApproval:', paymentId);
+                    try {
+                        const response = await fetch('/.netlify/functions/approve', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ paymentId }),
+                            signal: AbortSignal.timeout(10000)
+                        });
+                        if (!response.ok) throw new Error('Approval failed');
+                    } catch (error) {
+                        console.error('Premium approval error:', error);
+                        showCustomAlert('Approval failed: ' + error.message);
+                    }
+                },
+                onReadyForServerCompletion: async function(paymentId, txid) {
+                    console.log('Premium onReadyForServerCompletion:', paymentId, txid);
+                    try {
+                        const response = await fetch('/.netlify/functions/complete', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ paymentId, txid }),
+                            signal: AbortSignal.timeout(10000)
+                        });
+                        if (!response.ok) throw new Error('Completion failed');
+
+                        grantPremium(plan);
+
+                        const modal = document.getElementById('premium-modal');
+                        if (modal) modal.style.display = 'none';
+                        showCustomAlert(`Chess Pi Premium (${planLabel}) is active! Every level, theme, piece set, and bot personality is unlocked while it lasts.`);
+                    } catch (error) {
+                        console.error('Premium completion error:', error);
+                        showCustomAlert('Completion failed: ' + error.message);
+                    } finally {
+                        isProcessingPayment = false;
+                        setPaymentButtonsBusy(false);
+                    }
+                },
+                onCancel: function(paymentId) {
+                    console.log('Premium payment canceled:', paymentId);
+                    showCustomAlert('Payment canceled.');
+                    isProcessingPayment = false;
+                    setPaymentButtonsBusy(false);
+                },
+                onError: function(error, payment) {
+                    console.error('Premium payment error:', error, payment);
+                    showCustomAlert('Payment error: ' + error.message);
+                    isProcessingPayment = false;
+                    setPaymentButtonsBusy(false);
+                }
+            };
+
+            Pi.createPayment(paymentData, callbacks);
+        } catch (error) {
+            console.error('Premium authentication error:', error);
+            showCustomAlert('Authentication failed: ' + error.message);
+            isProcessingPayment = false;
+            setPaymentButtonsBusy(false);
+        }
+    }
+
+    const premiumBtnEl = document.getElementById('premium-btn');
+    if (premiumBtnEl) {
+        premiumBtnEl.addEventListener('click', function() {
+            if (isAIThinking || isProcessingPayment) return;
+            pauseTimer();
+            showPremiumModal();
+        });
+    }
+
+    const premiumMonthlyBtnEl = document.getElementById('premium-monthly-btn');
+    if (premiumMonthlyBtnEl) {
+        premiumMonthlyBtnEl.addEventListener('click', function() {
+            if (isProcessingPayment) return;
+            pendingPremiumPlan = 'monthly';
+            processPremiumPayment();
+        });
+    }
+
+    const premiumYearlyBtnEl = document.getElementById('premium-yearly-btn');
+    if (premiumYearlyBtnEl) {
+        premiumYearlyBtnEl.addEventListener('click', function() {
+            if (isProcessingPayment) return;
+            pendingPremiumPlan = 'yearly';
+            processPremiumPayment();
+        });
+    }
+
+    const premiumCancelBtnEl = document.getElementById('premium-cancel-btn');
+    if (premiumCancelBtnEl) {
+        premiumCancelBtnEl.addEventListener('click', function() {
+            const modal = document.getElementById('premium-modal');
+            if (modal) modal.style.display = 'none';
+            pendingPremiumPlan = null;
+            resumeTimer();
+        });
+    }
+
    
     // Function to update the mute button's icon to match the current state
     function updateMuteIcon() {
         const muteIcon = document.getElementById('mute-icon');
         if (!muteIcon) return;
-        muteIcon.classList.remove('fa-volume-up', 'fa-volume-mute');
-        muteIcon.classList.add(isMuted ? 'fa-volume-mute' : 'fa-volume-up');
+        muteIcon.classList.remove('fa-volume-high', 'fa-volume-xmark');
+        muteIcon.classList.add(isMuted ? 'fa-volume-xmark' : 'fa-volume-high');
     }
 
     // Setup mute button
@@ -1485,13 +2365,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 userSettings.extraTime--;
                 document.getElementById('extra-time-count').textContent = userSettings.extraTime;
-                updateFeatureButtonsState();
                 if (playerTime > 10) sounds.tenseconds.stop();
 
                 // Update statistics
                 gameStats.extraTimeUsed++;
 
+                // Show the "Added 1 minute!" alert BEFORE recomputing the
+                // feature-button state below — that recompute is what can
+                // trigger the "all features depleted, refill now" toast
+                // (checkRefillButtonState -> showPromoMessage), and having
+                // the alert already open by then is what makes it get
+                // deferred instead of popping up underneath this alert.
                 showCustomAlert(`Added ${extraMinutes} minute of extra time!`);
+                updateFeatureButtonsState();
             } else {
                 showCustomAlert("You've used all your extra time.");
             }
@@ -2133,7 +3019,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (playerTime <= 0) {
                     sounds.tenseconds.stop();
                     clearInterval(gameTimer);
-                    endGame(`Time's up! Black wins by timeout!`, false);
+                    endGame(`Time's up! Black wins by timeout!`, false, 'loss');
                 }
             }
         }, 1000);
@@ -2206,19 +3092,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ENHANCED FUNCTION FROM script (8).js - Fixed statistics logic
     // Function to update comprehensive statistics after game ends
-    function updateComprehensiveStats(result, timeUsed, moves, difficulty) {
+    // `result` is the display text only (stored for the "Current Game" tab)
+    // — `outcome` ('win'|'loss'|'draw'), passed explicitly by endGame(), is
+    // what actually drives win/loss/draw counting. See the BUG FIX note on
+    // endGame() for why this used to (unreliably) parse `result` instead.
+    function updateComprehensiveStats(result, outcome, timeUsed, moves, difficulty) {
         // Update overall statistics
         comprehensiveStats.overall.gamesPlayed++;
         
-        // CORRECTED: Fixed the logic for determining game result
-        const isWin = result.includes('wins') && result.includes('White') && !result.includes('surrender');
+        const isWin = outcome === 'win';
         if (isWin) {
             comprehensiveStats.overall.wins++;
             comprehensiveStats.overall.currentStreak = comprehensiveStats.overall.currentStreak > 0 ? comprehensiveStats.overall.currentStreak + 1 : 1;
             comprehensiveStats.overall.bestStreak = Math.max(comprehensiveStats.overall.bestStreak, comprehensiveStats.overall.currentStreak);
-        } else if (result.includes('wins') && result.includes('Black') || 
-                  result.includes('surrender') || 
-                  result.includes('timeout')) {
+        } else if (outcome === 'loss') {
             comprehensiveStats.overall.losses++;
             comprehensiveStats.overall.currentStreak = 0;
         } else {
@@ -2258,9 +3145,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (!diffStats.fastestWin || moves < diffStats.fastestWin) {
                     diffStats.fastestWin = moves;
                 }
-            } else if (result.includes('wins') && result.includes('Black') || 
-                      result.includes('surrender') || 
-                      result.includes('timeout')) {
+            } else if (outcome === 'loss') {
                 diffStats.losses++;
             } else {
                 diffStats.draws++;
@@ -2370,7 +3255,39 @@ document.addEventListener('DOMContentLoaded', function() {
    
     // ENHANCED FUNCTION FROM script (8).js - Fixed end game logic
     // Function to end the game and show modal
-    function endGame(message, isWin = false) {
+    //
+    // BUG FIX: win/loss/draw used to be re-derived by matching English
+    // substrings ('wins', 'White', 'Black', 'surrender', 'timeout') inside
+    // `message` — both here and in updateComprehensiveStats() — even though
+    // every call site already knows the real outcome via `isWin`/game state.
+    // Since every other user-facing string in this app goes through
+    // i18next, localizing these particular status strings (a very plausible
+    // future edit) would make every one of those .includes() checks stop
+    // matching, silently turning every win/loss into a recorded 'draw' —
+    // both in local stats and on the Pi leaderboard — with no error
+    // anywhere. `outcome` is now passed explicitly by every call site
+    // instead, so the win/loss/draw record no longer depends on the exact
+    // (possibly-translated) wording of the display message.
+    function endGame(message, isWin = false, outcome = null) {
+        if (!outcome) outcome = isWin ? 'win' : 'loss'; // back-compat fallback for any caller that doesn't pass it
+
+        // Stop the Premium attention-flash cycle the moment the match ends,
+        // for the same reason as the low-time ticking sound below — no
+        // matter why it ended.
+        stopPremiumAttentionFlashCycle();
+
+        // FREE TRIAL: this one game was the trial's single "use" — spend it
+        // and let renderLockState() re-lock the item (and reset userSettings
+        // back to the free default) so the next game starts from scratch
+        // unless the player pays to keep it.
+        if (activeTrialTheme || activeTrialPieceSet || activeTrialLevel || activeTrialBotPersonality) {
+            activeTrialTheme = null;
+            activeTrialPieceSet = null;
+            activeTrialLevel = null;
+            activeTrialBotPersonality = null;
+            renderLockState();
+        }
+
         // Stop the low-time ticking sound the instant the game ends, no
         // matter why it ended (checkmate, draw, surrender, or timeout).
         sounds.tenseconds.stop();
@@ -2400,15 +3317,17 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update game statistics
         updateGameStats(message);
         
-        // CORRECTED: Fixed the isWin parameter for surrender case
-        let actualIsWin = isWin;
-        if (message.includes('surrender')) {
-            actualIsWin = false;
-        }
+        // `outcome` is authoritative (passed by the caller, never parsed
+        // from `message` — see the BUG FIX note on endGame() above).
+        let actualIsWin = outcome === 'win';
         
         // Update comprehensive statistics - FIXED: Pass timeUsed instead of duration
-        updateComprehensiveStats(message, timeUsed, gameStats.totalMoves, userSettings.difficulty);
-        submitScoreToLeaderboard();
+        updateComprehensiveStats(message, outcome, timeUsed, gameStats.totalMoves, userSettings.difficulty);
+        // What's SENT to the server for the leaderboard — driven by the
+        // same authoritative `outcome`, not text-matched from `message`.
+        // The server independently trusts only the signed game token for
+        // difficulty/timing — see submit-score.js.
+        submitScoreToLeaderboard(outcome);
         
         // Show game over modal
         const gameOverModal = document.getElementById('game-over-modal');
@@ -2446,14 +3365,17 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update game status
         const gameStatusEl = document.getElementById('game-status');
         if (gameStatusEl) gameStatusEl.textContent = message;
+        // Sound is picked from the same authoritative `outcome` used for
+        // stats/leaderboard above — never from `message` text — for the
+        // same reason spelled out in the BUG FIX note at the top of this
+        // function: matching substrings in a user-facing string silently
+        // breaks the moment that string is reworded or translated.
         if (!isMuted) {
-            if (message.includes('wins')) {
-                if (actualIsWin) {
-                    sounds['game-win'].play();
-                } else {
-                    sounds['game-lose'].play();
-                }
-            } else if (message.includes('Draw')) {
+            if (outcome === 'win') {
+                sounds['game-win'].play();
+            } else if (outcome === 'loss') {
+                sounds['game-lose'].play();
+            } else if (outcome === 'draw') {
                 sounds['game-draw'].play();
             } else {
                 sounds['game-end'].play();
@@ -2492,6 +3414,20 @@ document.addEventListener('DOMContentLoaded', function() {
         moveHistory = [];
         selectedSquare = null;
         validMoves = [];
+
+        // Get a fresh, signed game token for THIS game before anything else
+        // — the leaderboard submission at the end will be rejected without
+        // one that matches this difficulty/start time.
+        requestGameToken(userSettings.difficulty);
+
+        // Show the selected bot personality's name in the in-game HUD
+        // instead of a generic "Bot AI" label, so the player always knows
+        // who they're up against.
+        const botTextEl = document.getElementById('bot-text');
+        if (botTextEl) {
+            const personalityMeta = BOT_PERSONALITIES[userSettings.botPersonality];
+            botTextEl.textContent = personalityMeta ? personalityMeta.name : i18next.t('blacksTurn');
+        }
        
         // Reset game statistics - FIXED: Ensure startTime is set correctly
         gameStats = {
@@ -2520,6 +3456,56 @@ document.addEventListener('DOMContentLoaded', function() {
         const gameOverModal = document.getElementById('game-over-modal');
         if (gameOverModal) gameOverModal.style.display = 'none';
         if (!isMuted) sounds['game-start'].play();
+
+        startPremiumAttentionFlashCycle();
+    }
+
+    // Repeatedly flashes the Premium crown icon gold for ~10s, pauses for
+    // ~10s, and repeats for as long as the current match is in progress —
+    // so a non-subscriber keeps noticing it's there to try without it
+    // running permanently once they've clicked away. Started in
+    // initNewGame() and stopped in endGame() (see stopPremiumAttentionFlashCycle
+    // below). Skipped/stopped entirely for players who already have an
+    // active subscription.
+    let premiumFlashTimer = null;
+    let premiumFlashActive = false;
+
+    function startPremiumAttentionFlashCycle() {
+        stopPremiumAttentionFlashCycle(); // never let two cycles overlap
+        const btn = document.getElementById('premium-btn');
+        if (!btn || btn.classList.contains('premium-active')) return;
+
+        premiumFlashActive = true;
+
+        function tick(turnOn) {
+            if (!premiumFlashActive) return;
+            // Re-check each tick — e.g. Premium may have activated, or the
+            // button may have been removed, since the cycle started.
+            if (!btn.isConnected || btn.classList.contains('premium-active')) {
+                stopPremiumAttentionFlashCycle();
+                return;
+            }
+            btn.classList.toggle('premium-attention-flash', turnOn);
+            premiumFlashTimer = setTimeout(() => tick(!turnOn), 10000);
+        }
+
+        // Small initial delay so the first flash starts after the
+        // board/timer animation settles, rather than competing with it the
+        // instant the game appears.
+        premiumFlashTimer = setTimeout(() => tick(true), 1200);
+    }
+
+    // Stops the flash cycle immediately (match ended, a new game is about
+    // to start, or Premium just activated) and makes sure the icon isn't
+    // left mid-flash.
+    function stopPremiumAttentionFlashCycle() {
+        premiumFlashActive = false;
+        if (premiumFlashTimer) {
+            clearTimeout(premiumFlashTimer);
+            premiumFlashTimer = null;
+        }
+        const btn = document.getElementById('premium-btn');
+        if (btn) btn.classList.remove('premium-attention-flash');
     }
 
     // Function to update game status (check, checkmate, etc.)
@@ -2532,10 +3518,10 @@ document.addEventListener('DOMContentLoaded', function() {
             const winner = game.turn() === 'w' ? 'Black' : 'White';
             status = `Checkmate! ${winner} wins!`;
             isWin = (winner === 'White'); // White player is the user
-            endGame(status, isWin);
+            endGame(status, isWin, isWin ? 'win' : 'loss');
         } else if(game.in_draw()) {
             status = "Draw!";
-            endGame(status, false); // Draw is not a win
+            endGame(status, false, 'draw'); // Draw is not a win
         } else if (game.in_check()) {
             status = `${game.turn() === 'w' ? 'White' : 'Black'} is in check!`;
         } else {
@@ -2563,7 +3549,10 @@ document.addEventListener('DOMContentLoaded', function() {
         updateNavArrows(pageIndex);
         currentPage = pageIndex;
        
-        if (pageIndex === 4) {
+        // Page order: 0=welcome, 1=theme, 2=pieceset, 3=bot personality,
+        // 4=difficulty, 5=game. The game page is now index 5 (it used to
+        // be 4, before the bot-personality page was inserted at index 3).
+        if (pageIndex === 5) {
             initNewGame();
             updateCurrentSettings();
             updateFeatureButtonsState();
@@ -2578,14 +3567,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to update navigation arrows visibility
     function updateNavArrows(pageIndex) {
         if (!leftArrow || !rightArrow) return;
-        if (pageIndex === 0 || pageIndex === 4) {
+        if (pageIndex === 0 || pageIndex === 5) {
             leftArrow.classList.add('hidden');
             rightArrow.classList.add('hidden');
         } else {
             leftArrow.classList.remove('hidden');
             rightArrow.classList.remove('hidden');
             leftArrow.classList.toggle('hidden', pageIndex === 1);
-            rightArrow.classList.toggle('hidden', pageIndex === 3);
+            rightArrow.classList.toggle('hidden', pageIndex === 4);
         }
     }
    
@@ -2606,8 +3595,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (savedSettings) {
                 const parsed = JSON.parse(savedSettings);
                
-                // Validate
-                userSettings.language = ['en', 'fr', 'es', 'ar', 'zh', 'ru'].includes(parsed.language) ? parsed.language : 'en';
+                // Validate — English only.
+                userSettings.language = 'en';
                 // Migrate old theme names (from before this update) to their
                 // closest new equivalent, so returning players don't get
                 // silently reset to the default.
@@ -2615,6 +3604,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const migratedTheme = themeMigration[parsed.theme] || parsed.theme;
                 userSettings.theme = ['brown', 'green', 'pink', 'blue'].includes(migratedTheme) ? migratedTheme : 'brown';
                 userSettings.pieceSet = ['neo', 'wood', 'glass', 'marble'].includes(parsed.pieceSet) ? parsed.pieceSet : 'neo';
+                userSettings.botPersonality = BOT_PERSONALITY_ORDER.includes(parsed.botPersonality) ? parsed.botPersonality : 'aggressive';
                 userSettings.difficulty = ['easy', 'medium', 'hard', 'expert'].includes(parsed.difficulty) ? parsed.difficulty : 'easy';
                 userSettings.soundMuted = !!parsed.soundMuted;
                 isMuted = userSettings.soundMuted;
@@ -2627,6 +3617,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (card.getAttribute('data-theme') === userSettings.theme ||
                         card.getAttribute('data-piece-set') === userSettings.pieceSet ||
                         card.getAttribute('data-lang') === userSettings.language ||
+                        card.getAttribute('data-bot-personality') === userSettings.botPersonality ||
                         card.getAttribute('data-difficulty') === userSettings.difficulty) {
                         card.classList.add('selected');
                     }
@@ -2708,6 +3699,53 @@ document.addEventListener('DOMContentLoaded', function() {
         // 404s for any reason, fall back to cburnett, then finally to a
         // Unicode glyph (handled by the <img> onerror chain in the caller).
         return [chesscomUrl, ...cburnettUrls];
+    }
+
+    // Preloads every piece image (6 types x 2 colors) for a given piece set
+    // before it's ever put on the board. updateBoard() rebuilds every
+    // square with a fresh <img src="..."> — without this, each of those 32
+    // images finishes downloading at a slightly different moment, so the
+    // player visibly watches the set change piece-by-piece instead of all
+    // at once. Resolves once every image has either loaded or exhausted
+    // its fallback chain (never rejects, so a slow/broken image can't hang
+    // the Apply flow — updateBoard()'s own onerror chain still runs as a
+    // final safety net either way).
+    function preloadPieceSetImages(pieceSet) {
+        // Hard safety net: this must never be able to warm the cache for a
+        // set the player hasn't unlocked, even if some future change ever
+        // calls it from somewhere other than the Apply handler above
+        // (which already checks this before calling in). Note this is
+        // belt-and-suspenders only — preloading never unlocks anything by
+        // itself: it just pre-fetches PUBLIC, unauthenticated CDN images
+        // into the browser's normal HTTP cache (same images anyone could
+        // already load directly by URL), it never writes to userSettings,
+        // playerProgress, or the board, and the board only ever renders
+        // whatever userSettings.pieceSet already says — which the Apply
+        // handler only ever sets to something isPieceSetUnlocked() approved.
+        if (!isPieceSetUnlocked(pieceSet)) return Promise.resolve();
+        const types = ['p', 'n', 'b', 'r', 'q', 'k'];
+        const colors = ['w', 'b'];
+        const promises = [];
+        types.forEach((type) => {
+            colors.forEach((color) => {
+                const sources = getPieceImageSources(type, color, pieceSet);
+                promises.push(new Promise((resolve) => {
+                    let sourceIndex = 0;
+                    const img = new Image();
+                    img.onload = () => resolve();
+                    img.onerror = () => {
+                        sourceIndex++;
+                        if (sourceIndex < sources.length) {
+                            img.src = sources[sourceIndex];
+                        } else {
+                            resolve(); // give up quietly — same fallback chain updateBoard() already has
+                        }
+                    };
+                    img.src = sources[sourceIndex];
+                }));
+            });
+        });
+        return Promise.all(promises);
     }
 
     function createPieceElement(type, color, pieceSet) {
@@ -2970,11 +4008,21 @@ document.addEventListener('DOMContentLoaded', function() {
     function playMoveSound(move, isPlayer = true) {
         if (!isMuted) {
             let moveSoundType = isPlayer ? 'move-self' : 'move-opponent';
+            // Castling detected two ways and OR'd together: chess.js's own
+            // 'k'/'q' move flags, AND independently by "the king moved two
+            // files" (from/to file distance === 2). The second check is a
+            // safety net — it doesn't depend on flags being set correctly
+            // by whichever code path produced this move object (engine
+            // moves are applied via the same {from,to} object form as
+            // on-screen player clicks, but this way the castle sound can
+            // never silently fail to fire for one side and not the other).
+            const isKingTwoFileMove = move.piece === 'k' &&
+                Math.abs(move.from.charCodeAt(0) - move.to.charCodeAt(0)) === 2;
             if (move.flags.includes('c') || move.flags.includes('e')) {
                 moveSoundType = 'capture';
             } else if (move.flags.includes('p')) {
                 moveSoundType = 'promote';
-            } else if (move.flags.includes('k') || move.flags.includes('q')) {
+            } else if (move.flags.includes('k') || move.flags.includes('q') || isKingTwoFileMove) {
                 moveSoundType = 'castle';
             }
             sounds[moveSoundType].play();
@@ -3630,11 +4678,22 @@ document.addEventListener('DOMContentLoaded', function() {
     //
     // BANDWIDTH: the engine file (~1-2MB) is loaded from a free public CDN
     // (cdnjs / Cloudflare) instead of being hosted on Netlify, so it never
-    // counts against your Netlify bandwidth quota. If the CDN is ever
-    // unreachable, it automatically falls back to a local "stockfish.js"
-    // file in your project root (if you keep one there).
+    // counts against your Netlify bandwidth quota. If that CDN is ever
+    // unreachable, a second independent CDN mirror (jsdelivr) is tried
+    // before anything is ever pulled from Netlify — this is what actually
+    // matters for bandwidth: the local "stockfish.js" fallback file in
+    // this project is ~10MB (much larger than the CDN's minified build),
+    // so every time that path gets hit it costs roughly 5-10x more
+    // bandwidth than a CDN miss would. Two independent CDNs failing at
+    // once is rare, so this local file should now only ever be reached in
+    // a genuine worst case. If you want to shrink that worst case further,
+    // replace the local stockfish.js with the same minified build the CDN
+    // serves (stockfish.min.js, ~1-2MB) instead of a full unminified copy.
     // ===================================================================
-    const STOCKFISH_CDN_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.min.js';
+    const STOCKFISH_CDN_URLS = [
+        'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.min.js',
+        'https://cdn.jsdelivr.net/npm/stockfish.js@10.0.2/stockfish.min.js'
+    ];
     const STOCKFISH_LOCAL_FALLBACK_PATH = 'stockfish.js';
 
     // Wraps a promise with a hard timeout. If the promise hasn't settled by
@@ -3670,20 +4729,28 @@ document.addEventListener('DOMContentLoaded', function() {
     // URL. This is the most compatible way to run a cross-origin script in
     // a Worker (more reliable across browsers than `new Worker(cdnUrl)`
     // directly). The browser's normal HTTP cache (plus our Service Worker)
-    // will cache the CDN response, so this is only a real network fetch once.
+    // will cache each CDN response, so this is only a real network fetch
+    // once per CDN per browser.
+    //
+    // Tries each CDN mirror in order before ever touching the local
+    // fallback file — see the BANDWIDTH comment above for why that
+    // ordering matters.
     async function createStockfishWorker() {
-        try {
-            const response = await fetch(STOCKFISH_CDN_URL, { mode: 'cors' });
-            if (!response.ok) throw new Error('CDN responded with status ' + response.status);
-            const scriptText = await response.text();
-            const blob = new Blob([scriptText], { type: 'application/javascript' });
-            const blobUrl = URL.createObjectURL(blob);
-            return new Worker(blobUrl);
-        } catch (cdnErr) {
-            console.error('Failed to load Stockfish from CDN, trying local fallback file:', cdnErr);
-            // Fallback: try a locally-hosted copy, if one exists in the project.
-            return new Worker(STOCKFISH_LOCAL_FALLBACK_PATH);
+        for (const cdnUrl of STOCKFISH_CDN_URLS) {
+            try {
+                const response = await fetch(cdnUrl, { mode: 'cors' });
+                if (!response.ok) throw new Error('CDN responded with status ' + response.status);
+                const scriptText = await response.text();
+                const blob = new Blob([scriptText], { type: 'application/javascript' });
+                const blobUrl = URL.createObjectURL(blob);
+                return new Worker(blobUrl);
+            } catch (cdnErr) {
+                console.error('Failed to load Stockfish from CDN mirror', cdnUrl, cdnErr);
+            }
         }
+        console.error('All Stockfish CDN mirrors failed, falling back to local file.');
+        // Last resort: a locally-hosted copy, if one exists in the project.
+        return new Worker(STOCKFISH_LOCAL_FALLBACK_PATH);
     }
 
     const StockfishEngine = (function() {
@@ -3692,7 +4759,14 @@ document.addEventListener('DOMContentLoaded', function() {
         let readyPromise = null;
         let pendingResolve = null;
         let currentSkillLevel = null;
+        let currentMultiPv = 1;
         let initFailed = false;
+
+        // Only set while a getTopMoves() call is in flight — collects the
+        // "info ... multipv N ... score cp/mate X ... pv <move> ..." lines
+        // Stockfish streams out while it searches, keyed by MultiPV index.
+        let multiPvCollector = null;
+        let pendingTopMovesResolve = null;
 
         function init() {
             if (worker || initFailed) return readyPromise;
@@ -3723,19 +4797,59 @@ document.addEventListener('DOMContentLoaded', function() {
             return readyPromise;
         }
 
+        // Parses a single UCI "info ..." search-progress line. Returns null
+        // for lines that aren't a scored/pv'd search update (e.g. plain
+        // "info string ..." lines), otherwise { multipv, scoreType, scoreValue, move }.
+        // Field order isn't assumed (Stockfish always emits multipv before
+        // score before pv, but matching each piece independently is more
+        // robust to engine-version differences).
+        function parseInfoLine(line) {
+            const multipvMatch = line.match(/\bmultipv (\d+)/);
+            const scoreMatch = line.match(/\bscore (cp|mate) (-?\d+)/);
+            const pvMatch = line.match(/\bpv (.+)$/);
+            if (!multipvMatch || !scoreMatch || !pvMatch) return null;
+            const firstMove = pvMatch[1].trim().split(' ')[0];
+            if (!firstMove) return null;
+            return {
+                multipv: parseInt(multipvMatch[1], 10),
+                scoreType: scoreMatch[1], // 'cp' or 'mate'
+                scoreValue: parseInt(scoreMatch[2], 10),
+                move: firstMove
+            };
+        }
+
         function handleMessage(line, resolveInit) {
             if (typeof line !== 'string' || line.length === 0) return;
 
             if (line === 'readyok') {
                 isReady = true;
                 if (resolveInit) resolveInit(true);
+            } else if (multiPvCollector && line.startsWith('info ')) {
+                const parsed = parseInfoLine(line);
+                if (parsed) {
+                    multiPvCollector[parsed.multipv] = {
+                        move: parsed.move,
+                        cp: parsed.scoreType === 'cp' ? parsed.scoreValue : undefined,
+                        mate: parsed.scoreType === 'mate' ? parsed.scoreValue : undefined
+                    };
+                }
             } else if (line.startsWith('bestmove')) {
                 const parts = line.split(' ');
                 const bestMoveUci = parts[1];
-                if (pendingResolve) {
+                const cleanBest = bestMoveUci && bestMoveUci !== '(none)' ? bestMoveUci : null;
+                if (pendingTopMovesResolve) {
+                    const resolveTop = pendingTopMovesResolve;
+                    const collected = multiPvCollector || {};
+                    pendingTopMovesResolve = null;
+                    multiPvCollector = null;
+                    const lines = Object.keys(collected)
+                        .sort((a, b) => Number(a) - Number(b))
+                        .map((k) => collected[k]);
+                    resolveTop({ bestMove: cleanBest, lines: lines });
+                } else if (pendingResolve) {
                     const resolve = pendingResolve;
                     pendingResolve = null;
-                    resolve(bestMoveUci && bestMoveUci !== '(none)' ? bestMoveUci : null);
+                    resolve(cleanBest);
                 }
             }
         }
@@ -3746,6 +4860,15 @@ document.addEventListener('DOMContentLoaded', function() {
             currentSkillLevel = level;
             if (worker) {
                 worker.postMessage(`setoption name Skill Level value ${level}`);
+            }
+        }
+
+        function setMultiPv(count) {
+            count = Math.max(1, Math.min(5, count));
+            if (count === currentMultiPv) return;
+            currentMultiPv = count;
+            if (worker) {
+                worker.postMessage(`setoption name MultiPV value ${count}`);
             }
         }
 
@@ -3760,7 +4883,41 @@ document.addEventListener('DOMContentLoaded', function() {
                     reject(new Error('Stockfish engine not initialized'));
                     return;
                 }
+                // A plain single-best-move request should never be scored
+                // against a stale MultiPV setting left over from a personality
+                // bot's last move — always fall back to a single line here.
+                setMultiPv(1);
                 pendingResolve = resolve;
+                worker.postMessage('stop');
+                worker.postMessage(`position fen ${fen}`);
+                if (options && options.movetime) {
+                    worker.postMessage(`go movetime ${options.movetime}`);
+                } else if (options && options.depth) {
+                    worker.postMessage(`go depth ${options.depth}`);
+                } else {
+                    worker.postMessage('go depth 12');
+                }
+            });
+        }
+
+        // Returns { bestMove, lines } where lines is an array (ordered by
+        // MultiPV rank, best first) of { move, cp, mate } — used by the
+        // aggressive/defensive/endgame bot personalities to pick among
+        // several roughly-equal-strength candidate moves instead of always
+        // taking the single top line. options: { movetime, multipv }
+        function getTopMoves(fen, options) {
+            return new Promise((resolve, reject) => {
+                if (initFailed) {
+                    reject(new Error('Stockfish is not available'));
+                    return;
+                }
+                if (!worker) {
+                    reject(new Error('Stockfish engine not initialized'));
+                    return;
+                }
+                setMultiPv((options && options.multipv) || 3);
+                multiPvCollector = {};
+                pendingTopMovesResolve = resolve;
                 worker.postMessage('stop');
                 worker.postMessage(`position fen ${fen}`);
                 if (options && options.movetime) {
@@ -3781,6 +4938,7 @@ document.addEventListener('DOMContentLoaded', function() {
             init,
             setSkillLevel,
             getBestMove,
+            getTopMoves,
             stop,
             isReady: () => isReady,
             isAvailable: () => !initFailed
@@ -3812,6 +4970,216 @@ document.addEventListener('DOMContentLoaded', function() {
             to: uciMove.substring(2, 4),
             promotion: uciMove.length > 4 ? uciMove.substring(4, 5) : undefined
         };
+    }
+
+    // ===== Bot personality move-selection layer =====
+    // Sits directly on top of StockfishEngine: for the trickster personality
+    // it consults a small opening book of known gambit lines before ever
+    // asking Stockfish anything; for aggressive/defensive/endgame it asks
+    // Stockfish for several roughly-equal-strength candidate moves
+    // (MultiPV) and picks among them with a lightweight heuristic. This
+    // means the bot's actual playing STRENGTH always stays tied to the
+    // selected difficulty — personality only breaks ties among moves that
+    // are already close to the engine's own best line, never trades away
+    // real strength for "flavor".
+    const PIECE_VALUES = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+
+    // A small opening book of Black gambit/counter-gambit replies (the bot
+    // always plays Black in this app). Keys are the move history so far
+    // (as "from-to" pairs joined with "|", the same format moveHistory
+    // already uses elsewhere in this file) ending in a White move; values
+    // are the Black reply. Deliberately shallow — enough to reliably steer
+    // the trickster bot into a real gambit line in the opening. Once the
+    // opponent leaves the book, or it runs out, play falls back to the
+    // normal engine at the selected difficulty for the rest of the game.
+    // This starter book covers the most common first two moves; it can be
+    // extended with deeper lines later without touching any other logic.
+    const TRICKSTER_OPENING_BOOK = {
+        // 1.e4 -> 1...e5 (heads toward an open, tactical game)
+        'e2-e4': 'e7-e5',
+        // 1.e4 e5 2.Nf3 -> 2...f5!? (Latvian Gambit)
+        'e2-e4|e7-e5|g1-f3': 'f7-f5',
+        // 1.e4 e5 2.Bc4 -> 2...f5!? (same idea vs the Bishop's Opening)
+        'e2-e4|e7-e5|f1-c4': 'f7-f5',
+        // 1.e4 e5 2.f4 (King's Gambit) -> 2...exf4 (accepted)
+        'e2-e4|e7-e5|f2-f4': 'e5-f4',
+        // 1.e4 e5 2.Nc3 -> 2...Nf6 (keep it sharp)
+        'e2-e4|e7-e5|b1-c3': 'g8-f6',
+        // 1.d4 -> 1...e5!? (Englund Gambit)
+        'd2-d4': 'e7-e5',
+        // 1.d4 d5 2.c4 -> 2...e5!? (Albin Countergambit)
+        'd2-d4|d7-d5|c2-c4': 'e7-e5',
+        // 1.d4 Nf6 2.c4 -> 2...e5!? (Budapest Gambit)
+        'd2-d4|g8-f6|c2-c4': 'e7-e5',
+        // 1.d4 Nf6 2.c4 c5 3.d5 -> 3...b5!? (Benko Gambit)
+        'd2-d4|g8-f6|c2-c4|c7-c5|d4-d5': 'b7-b5',
+        // 1.c4 -> 1...e5 (steer toward a reversed Sicilian / open game)
+        'c2-c4': 'e7-e5',
+        // 1.Nf3 -> 1...e5 (invites transposition into e4-style gambits)
+        'g1-f3': 'e7-e5',
+        // 1.f4 -> 1...e5!? (From's Gambit)
+        'f2-f4': 'e7-e5'
+    };
+
+    function getTricksterBookMove(historyBeforeThisMove) {
+        // Only ever consult the book for the first ~10 plies (5 full moves)
+        // — after that we're well past "opening" and should just play the
+        // best move Stockfish can find like every other personality.
+        if (historyBeforeThisMove.length > 10) return null;
+        const key = historyBeforeThisMove.join('|');
+        return TRICKSTER_OPENING_BOOK[key] || null;
+    }
+
+    function findKingSquare(chessInstance, color) {
+        const board = chessInstance.board();
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const piece = board[r][c];
+                if (piece && piece.type === 'k' && piece.color === color) {
+                    return 'abcdefgh'[c] + (8 - r);
+                }
+            }
+        }
+        return null;
+    }
+
+    function squareDistance(a, b) {
+        const fileA = a.charCodeAt(0) - 97, rankA = parseInt(a[1], 10);
+        const fileB = b.charCodeAt(0) - 97, rankB = parseInt(b[1], 10);
+        return Math.max(Math.abs(fileA - fileB), Math.abs(rankA - rankB));
+    }
+
+    // Heuristic only: a pawn move by the mover's own color, starting from
+    // its home rank on the b/c or f/g files (the files that typically
+    // shield a castled king) counts as "weakening its own king shelter".
+    function isOwnKingShieldPawnMove(appliedMove) {
+        if (appliedMove.piece !== 'p') return false;
+        const homeRank = appliedMove.color === 'w' ? '2' : '7';
+        const fromFile = appliedMove.from[0];
+        const fromRank = appliedMove.from[1];
+        return fromRank === homeRank && ['b', 'c', 'f', 'g'].includes(fromFile);
+    }
+
+    function countNonPawnPieces(chessInstance) {
+        const board = chessInstance.board();
+        let count = 0;
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const piece = board[r][c];
+                if (piece && piece.type !== 'p' && piece.type !== 'k') count++;
+            }
+        }
+        return count;
+    }
+
+    function getMaterialBalance(chessInstance, forColor) {
+        const board = chessInstance.board();
+        let balance = 0;
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const piece = board[r][c];
+                if (!piece) continue;
+                const value = PIECE_VALUES[piece.type] || 0;
+                balance += piece.color === forColor ? value : -value;
+            }
+        }
+        return balance;
+    }
+
+    // Evaluates one MultiPV candidate move for how well it fits a
+    // personality's style, using signals computed directly from chess.js
+    // after applying the move to a scratch board — not a second engine
+    // search, just cheap, self-contained heuristics.
+    function scorePersonalityMove(fen, candidate, personality) {
+        try {
+            const scratch = new Chess(fen);
+            const applied = scratch.move(uciToMoveObject(candidate.move));
+            if (!applied) return -Infinity; // illegal/unparseable candidate — never pick it
+            let score = 0;
+            const isCapture = !!applied.captured;
+            const capturedValue = isCapture ? (PIECE_VALUES[applied.captured] || 0) : 0;
+            const givesCheck = scratch.in_check();
+
+            if (personality === 'aggressive') {
+                if (isCapture) score += capturedValue * 3;
+                if (givesCheck) score += 25;
+                // Reward moves that land a piece close to the opponent's
+                // king — a cheap proxy for "building an attack".
+                const enemyKingSquare = findKingSquare(scratch, applied.color === 'w' ? 'b' : 'w');
+                if (enemyKingSquare) score += (7 - squareDistance(applied.to, enemyKingSquare)) * 3;
+                if (['q', 'r', 'b'].includes(applied.piece)) score += 4;
+            } else if (personality === 'defensive') {
+                if (isCapture && capturedValue >= 3) score += capturedValue * 2;
+                else if (!isCapture) score += 6;
+                if (isOwnKingShieldPawnMove(applied)) score -= 15;
+                if (givesCheck) score -= 3; // checks that aren't clearly winning tend to just burn tempo
+            } else if (personality === 'endgame') {
+                const pieceCount = countNonPawnPieces(scratch);
+                const materialEdge = getMaterialBalance(scratch, applied.color);
+                if (pieceCount <= 6 && materialEdge >= 0) {
+                    if (isCapture) score += 20 + capturedValue; // ahead with few pieces left: simplify
+                } else if (isCapture) {
+                    score += capturedValue * 2;
+                }
+            }
+            return score;
+        } catch (e) {
+            return -Infinity;
+        }
+    }
+
+    // Chooses the bot's move for this turn according to
+    // userSettings.botPersonality. Always returns a UCI move string (or
+    // null), the same contract as StockfishEngine.getBestMove, so
+    // makeAIMove doesn't need to know which personality is active.
+    async function getPersonalityUciMove(fen, settings, personality) {
+        if (personality === 'trickster') {
+            const bookMove = getTricksterBookMove(moveHistory);
+            if (bookMove) {
+                // Confirm the book move is actually legal in this exact
+                // position (the opponent may have transposed unexpectedly)
+                // before committing to it — never force an illegal move.
+                try {
+                    const scratch = new Chess(fen);
+                    if (scratch.move(uciToMoveObject(bookMove))) return bookMove;
+                } catch (e) { /* fall through to the engine below */ }
+            }
+            return await StockfishEngine.getBestMove(fen, { movetime: settings.movetime });
+        }
+
+        if (personality === 'aggressive' || personality === 'defensive' || personality === 'endgame') {
+            const result = await StockfishEngine.getTopMoves(fen, { movetime: settings.movetime, multipv: 3 });
+            if (!result || !result.lines || result.lines.length === 0) {
+                return result ? result.bestMove : null;
+            }
+            const best = result.lines[0];
+            const bestScoreCp = best.cp !== undefined ? best.cp : (best.mate !== undefined ? (best.mate > 0 ? 100000 : -100000) : 0);
+            // Only ever consider candidates within this many centipawns of
+            // the engine's actual best line, so personality never
+            // meaningfully weakens the bot below its selected difficulty —
+            // it only breaks ties among moves that are already roughly as
+            // good as each other.
+            const CP_TOLERANCE = 80;
+            const candidates = result.lines.filter((l) => {
+                const cp = l.cp !== undefined ? l.cp : (l.mate !== undefined ? (l.mate > 0 ? 100000 : -100000) : -100000);
+                return (bestScoreCp - cp) <= CP_TOLERANCE;
+            });
+            const pool = candidates.length ? candidates : [best];
+            let chosen = pool[0];
+            let bestPersonalityScore = -Infinity;
+            pool.forEach((candidate) => {
+                const s = scorePersonalityMove(fen, candidate, personality);
+                if (s > bestPersonalityScore) {
+                    bestPersonalityScore = s;
+                    chosen = candidate;
+                }
+            });
+            return chosen.move || result.bestMove;
+        }
+
+        // No personality-specific handling needed — just the engine's
+        // single best move at the selected difficulty.
+        return await StockfishEngine.getBestMove(fen, { movetime: settings.movetime });
     }
 
     // Fallback used only if Stockfish is unavailable or fails to respond,
@@ -3858,8 +5226,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             StockfishEngine.setSkillLevel(settings.skill);
             // Give the search itself a bit more time than requested, then give up.
+            // Routes through the personality layer (see getPersonalityUciMove
+            // above) so Aggressive/Defensive/Endgame/Trickster each play in
+            // their own style while staying at the same underlying strength
+            // as the selected difficulty.
             const uciMove = await withTimeout(
-                StockfishEngine.getBestMove(game.fen(), { movetime: settings.movetime }),
+                getPersonalityUciMove(game.fen(), settings, userSettings.botPersonality),
                 settings.movetime + 6000,
                 null
             );
@@ -3974,7 +5346,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const confirmSurrenderBtn = document.getElementById('confirm-surrender');
     if (confirmSurrenderBtn) {
         confirmSurrenderBtn.addEventListener('click', function() {
-            endGame("White surrendered. Black wins!", false);
+            endGame("White surrendered. Black wins!", false, 'loss');
             const surrenderModal = document.getElementById('surrender-modal');
             if (surrenderModal) surrenderModal.style.display = 'none';
             // Removed resumeTimer() call because the game has ended and the timer should not resume
@@ -3989,6 +5361,293 @@ document.addEventListener('DOMContentLoaded', function() {
             resumeTimer();
         });
     }
+
+    // ===== Live in-game board theme / piece set switcher =====
+    // Lets the player change to any board theme or piece set they've
+    // already unlocked (purchased individually, or via an active Premium
+    // subscription) WITHOUT resetting the board or losing the current
+    // position — createBoard()/updateBoard() both just redraw from the
+    // existing `game` object, they never touch its actual state. Opening
+    // the modal pauses the game clock the exact same way the Help and
+    // Advice icons already do (pauseTimer() is a no-op on Easy, which has
+    // no clock to pause), so browsing themes never costs the player time.
+    const THEME_SWATCHES = [
+        { id: 'brown', label: 'Brown' },
+        { id: 'green', label: 'Green' },
+        { id: 'pink', label: 'Pink' },
+        { id: 'blue', label: 'Blue' }
+    ];
+    const PIECESET_SWATCHES = [
+        { id: 'neo', label: 'Neo' },
+        { id: 'wood', label: 'Wood' },
+        { id: 'glass', label: 'Glass' },
+        { id: 'marble', label: 'Marble' }
+    ];
+
+    // Shared badge builder for the three swatch grids below. Only ever
+    // called for items that CAN be locked (the always-free default in each
+    // category — Brown/Neo/Aggressive Attacker — never gets a badge at
+    // all, matching how the theme/pieceset/bot selection pages never show
+    // a lock-overlay on their free default card either). For everything
+    // else: closed grey keyhole lock while locked, open GREEN keyhole lock once
+    // purchased/unlocked — same visual language as setCardLockState() uses
+    // on the selection pages, so "purchased" reads the same way everywhere
+    // in the app instead of just silently losing its badge here.
+    function buildSwatchLockBadge(unlocked) {
+        const badge = document.createElement('div');
+        badge.className = 'swatch-lock-badge' + (unlocked ? ' unlocked-badge' : '');
+        badge.innerHTML = `<i class="fas ${unlocked ? 'fa-unlock-keyhole' : 'fa-lock-keyhole'}"></i>`;
+        return badge;
+    }
+
+    // Selections made in the modal are staged here first — clicking a
+    // swatch only moves the "selected" outline and updates this object;
+    // nothing actually reaches the board/userSettings until the Apply
+    // button is pressed (see the apply-game-settings-btn handler below).
+    // Reset to a fresh copy of userSettings every time the modal opens so
+    // stale picks from a previous visit never leak in.
+    let pendingGameSettings = null;
+
+    function renderGameSettingsModal() {
+        const activeSettings = pendingGameSettings || userSettings;
+        const themeGrid = document.getElementById('settings-theme-grid');
+        const pieceSetGrid = document.getElementById('settings-pieceset-grid');
+        if (themeGrid) {
+            themeGrid.innerHTML = '';
+            THEME_SWATCHES.forEach(({ id, label }) => {
+                const unlocked = isThemeUnlocked(id);
+                const swatch = document.createElement('div');
+                swatch.className = `settings-swatch theme-swatch-${id}`;
+                swatch.classList.toggle('locked', !unlocked);
+                swatch.classList.toggle('selected', activeSettings.theme === id);
+                swatch.setAttribute('role', 'button');
+                swatch.setAttribute('tabindex', '0');
+                swatch.setAttribute('aria-label', `${label} theme${unlocked ? '' : ' (locked)'}`);
+                if (LOCKABLE_THEMES.includes(id)) {
+                    swatch.appendChild(buildSwatchLockBadge(unlocked));
+                }
+                const labelEl = document.createElement('div');
+                labelEl.className = 'swatch-label';
+                labelEl.textContent = label;
+                swatch.appendChild(labelEl);
+                swatch.addEventListener('click', () => handleGameSettingsSwatchClick('theme', id, unlocked));
+                themeGrid.appendChild(swatch);
+            });
+        }
+        if (pieceSetGrid) {
+            pieceSetGrid.innerHTML = '';
+            PIECESET_SWATCHES.forEach(({ id, label }) => {
+                const unlocked = isPieceSetUnlocked(id);
+                const swatch = document.createElement('div');
+                swatch.className = 'settings-swatch pieceset-swatch';
+                swatch.classList.toggle('locked', !unlocked);
+                swatch.classList.toggle('selected', activeSettings.pieceSet === id);
+                swatch.setAttribute('role', 'button');
+                swatch.setAttribute('tabindex', '0');
+                swatch.setAttribute('aria-label', `${label} piece set${unlocked ? '' : ' (locked)'}`);
+                // Preview the set with a white knight — reuses the exact
+                // same CDN paths/fallback chain as the real board pieces
+                // (see getPieceImageSources), so if a set's images are
+                // ever unavailable this preview degrades the same way the
+                // board itself does.
+                const img = document.createElement('img');
+                img.className = 'swatch-piece-preview';
+                img.draggable = false;
+                img.alt = `${label} knight preview`;
+                const sources = getPieceImageSources('n', 'w', id);
+                let sourceIndex = 0;
+                img.src = sources[sourceIndex];
+                img.onerror = function() {
+                    sourceIndex++;
+                    if (sourceIndex < sources.length) {
+                        img.src = sources[sourceIndex];
+                    } else {
+                        img.remove();
+                        swatch.textContent = '♘';
+                    }
+                };
+                swatch.appendChild(img);
+                if (LOCKABLE_PIECE_SETS.includes(id)) {
+                    swatch.appendChild(buildSwatchLockBadge(unlocked));
+                }
+                const labelEl = document.createElement('div');
+                labelEl.className = 'swatch-label';
+                labelEl.textContent = label;
+                swatch.appendChild(labelEl);
+                swatch.addEventListener('click', () => handleGameSettingsSwatchClick('pieceset', id, unlocked));
+                pieceSetGrid.appendChild(swatch);
+            });
+        }
+        const botGrid = document.getElementById('settings-bot-grid');
+        if (botGrid) {
+            botGrid.innerHTML = '';
+            BOT_PERSONALITY_ORDER.forEach((id) => {
+                const meta = BOT_PERSONALITIES[id];
+                if (!meta) return;
+                const unlocked = isBotPersonalityUnlocked(id);
+                const swatch = document.createElement('div');
+                swatch.className = 'settings-swatch bot-swatch';
+                swatch.classList.toggle('locked', !unlocked);
+                swatch.classList.toggle('selected', activeSettings.botPersonality === id);
+                swatch.setAttribute('role', 'button');
+                swatch.setAttribute('tabindex', '0');
+                swatch.setAttribute('aria-label', `${meta.name}${unlocked ? '' : ' (locked)'}`);
+                const icon = document.createElement('i');
+                icon.className = `fas ${meta.icon}`;
+                swatch.appendChild(icon);
+                if (LOCKABLE_BOT_PERSONALITIES.includes(id)) {
+                    swatch.appendChild(buildSwatchLockBadge(unlocked));
+                }
+                const labelEl = document.createElement('div');
+                labelEl.className = 'swatch-label';
+                labelEl.textContent = meta.name;
+                swatch.appendChild(labelEl);
+                swatch.addEventListener('click', () => handleGameSettingsSwatchClick('bot', id, unlocked));
+                botGrid.appendChild(swatch);
+            });
+        }
+    }
+
+    function handleGameSettingsSwatchClick(kind, id, unlocked) {
+        if (!unlocked) {
+            // Send them straight to the existing paywall for this exact
+            // item instead of leaving a locked swatch as a dead end. Close
+            // this modal first (rather than stacking modals) — the unlock
+            // modal's own close/cancel/complete paths already resume the
+            // timer, so the pause started when this modal opened is still
+            // honored correctly either way.
+            const settingsModal = document.getElementById('game-settings-modal');
+            if (settingsModal) settingsModal.style.display = 'none';
+            showUnlockModal(kind === 'theme' ? 'theme' : kind === 'pieceset' ? 'pieceset' : 'bot', id);
+            return;
+        }
+        // Stage the pick only — nothing is applied to the board/game until
+        // the Apply button is pressed (see apply-game-settings-btn below).
+        if (!pendingGameSettings) {
+            pendingGameSettings = {
+                theme: userSettings.theme,
+                pieceSet: userSettings.pieceSet,
+                botPersonality: userSettings.botPersonality
+            };
+        }
+        const key = kind === 'theme' ? 'theme' : kind === 'pieceset' ? 'pieceSet' : 'botPersonality';
+        if (pendingGameSettings[key] === id) return;
+        pendingGameSettings[key] = id;
+        renderGameSettingsModal(); // refresh the "selected" outline
+    }
+
+    const gameSettingsBtn = document.getElementById('game-settings-btn');
+    const gameSettingsModal = document.getElementById('game-settings-modal');
+    if (gameSettingsBtn) {
+        gameSettingsBtn.addEventListener('click', function() {
+            pauseTimer();
+            // Fresh staging copy every time the modal is opened, so picks
+            // left over from a visit that was closed without Applying
+            // never leak into this one.
+            pendingGameSettings = {
+                theme: userSettings.theme,
+                pieceSet: userSettings.pieceSet,
+                botPersonality: userSettings.botPersonality
+            };
+            renderGameSettingsModal();
+            if (gameSettingsModal) gameSettingsModal.style.display = 'block';
+        });
+    }
+
+    // Apply button: commits whatever is currently staged in
+    // pendingGameSettings to userSettings and pushes it onto the actual
+    // board/game in one go, then closes the modal.
+    const applyGameSettingsBtn = document.getElementById('apply-game-settings-btn');
+    if (applyGameSettingsBtn) {
+        const applyBtnDefaultLabel = applyGameSettingsBtn.textContent;
+        applyGameSettingsBtn.addEventListener('click', async function() {
+            if (!pendingGameSettings) {
+                if (gameSettingsModal) gameSettingsModal.style.display = 'none';
+                resumeTimer();
+                return;
+            }
+            // Re-verify every pending pick is still something the player is
+            // actually entitled to right now — not just "was unlocked at
+            // the moment they tapped the swatch". Belt-and-suspenders
+            // against a Premium subscription lapsing (or any other unlock
+            // state changing) in the few seconds the modal was open; a
+            // pick that's no longer valid is silently dropped back to
+            // whatever's already applied instead of being pushed to the
+            // board. This also guarantees the preload step below can never
+            // be asked to warm the cache for a piece set the player hasn't
+            // paid for.
+            if (!isThemeUnlocked(pendingGameSettings.theme)) {
+                pendingGameSettings.theme = userSettings.theme;
+            }
+            if (!isPieceSetUnlocked(pendingGameSettings.pieceSet)) {
+                pendingGameSettings.pieceSet = userSettings.pieceSet;
+            }
+            if (!isBotPersonalityUnlocked(pendingGameSettings.botPersonality)) {
+                pendingGameSettings.botPersonality = userSettings.botPersonality;
+            }
+            const pieceSetChanging = userSettings.pieceSet !== pendingGameSettings.pieceSet;
+            // If the piece set is changing, fetch every piece image for the
+            // new set into the browser cache FIRST, while the old set is
+            // still showing normally — so the actual swap below (once
+            // everything's ready) is instant instead of trickling in piece
+            // by piece as each image finishes downloading.
+            if (pieceSetChanging) {
+                applyGameSettingsBtn.disabled = true;
+                applyGameSettingsBtn.textContent = 'Loading…';
+                try {
+                    await preloadPieceSetImages(pendingGameSettings.pieceSet);
+                } finally {
+                    applyGameSettingsBtn.disabled = false;
+                    applyGameSettingsBtn.textContent = applyBtnDefaultLabel;
+                }
+                // The player may have re-opened/changed their mind or closed
+                // the modal while the images were loading — only proceed if
+                // there's still a pending selection to apply.
+                if (!pendingGameSettings) return;
+                // Re-check once more: a Premium subscription could have
+                // expired in the seconds spent preloading. If it's no
+                // longer valid, fall back to whatever's already applied
+                // rather than committing it.
+                if (!isPieceSetUnlocked(pendingGameSettings.pieceSet)) {
+                    pendingGameSettings.pieceSet = userSettings.pieceSet;
+                }
+            }
+            let changed = false;
+            if (userSettings.theme !== pendingGameSettings.theme) {
+                userSettings.theme = pendingGameSettings.theme;
+                applyTheme(userSettings.theme);
+                changed = true;
+            }
+            if (userSettings.pieceSet !== pendingGameSettings.pieceSet) {
+                userSettings.pieceSet = pendingGameSettings.pieceSet;
+                updateBoard();
+                changed = true;
+            }
+            if (userSettings.botPersonality !== pendingGameSettings.botPersonality) {
+                // Switching personality mid-game is safe to do live: unlike
+                // the difficulty level, the bot's personality is never
+                // signed into the game token or factored into leaderboard
+                // scoring (see requestGameToken/submit-score.js) — it only
+                // changes which roughly-equal-strength candidate move the
+                // engine prefers on the bot's NEXT turn (getPersonalityUciMove
+                // is re-evaluated fresh every move), so there's no game
+                // state to reconcile and nothing to exploit by changing it
+                // mid-game.
+                userSettings.botPersonality = pendingGameSettings.botPersonality;
+                const botTextEl = document.getElementById('bot-text');
+                if (botTextEl) {
+                    const meta = BOT_PERSONALITIES[userSettings.botPersonality];
+                    botTextEl.textContent = meta ? meta.name : i18next.t('blacksTurn');
+                }
+                changed = true;
+            }
+            if (changed) updateCurrentSettings();
+            pendingGameSettings = null;
+            if (gameSettingsModal) gameSettingsModal.style.display = 'none';
+            resumeTimer();
+        });
+    }
+
    
     // Setup hint button
     const hintBtnEl = document.getElementById('hint-btn');
@@ -4213,15 +5872,11 @@ document.addEventListener('DOMContentLoaded', function() {
             // Generate PGN content
             const pgnText = game.pgn();
             
-            // Generate filename with timestamp and counter
-            const now = new Date();
-            const timestamp = now.toISOString().slice(0, 10).replace(/-/g, '');
-            
             // Get counter from localStorage or initialize to 1
             let exportCounter = parseInt(localStorage.getItem('chessPiExportCounter') || '0') + 1;
             localStorage.setItem('chessPiExportCounter', exportCounter.toString());
             
-            const filename = `chess-pi-${timestamp}-${exportCounter}.pgn`;
+            const filename = `chesspi-${exportCounter}.pgn`;
             
             // Create blob and download
             const blob = new Blob([pgnText], { type: 'text/plain' });
@@ -4285,6 +5940,10 @@ document.addEventListener('DOMContentLoaded', function() {
             selectedSquare = null;
             validMoves = [];
             isImported = true;
+            // An imported PGN isn't a game actually played against the
+            // bot in real time, so it must never be eligible for a
+            // leaderboard credit — drop any pending game token.
+            currentGameToken = null;
             
             // Load the PGN into the main game object
             game.load_pgn(pgnText);
@@ -4353,13 +6012,20 @@ document.addEventListener('DOMContentLoaded', function() {
    
     // Close modals when clicking outside
     window.addEventListener('click', function(event) {
-        const modals = ['import-pgn-modal', 'promotion-modal', 'surrender-modal', 'stats-modal', 'leaderboard-modal'];
+        const modals = ['import-pgn-modal', 'promotion-modal', 'surrender-modal', 'stats-modal', 'leaderboard-modal', 'game-settings-modal'];
        
         modals.forEach(modalId => {
             const modal = document.getElementById(modalId);
             if (modal && event.target == modal) {
                 modal.style.display = 'none';
-                if (modalId !== 'stats-modal' && modalId !== 'leaderboard-modal') {
+                if (modalId === 'stats-modal' || modalId === 'leaderboard-modal') {
+                    // These modals are only ever opened from the Game Over
+                    // screen, so dismissing them by clicking outside should
+                    // bring the player back to it — not leave the game stuck
+                    // with no modal visible at all.
+                    const gameOverModal = document.getElementById('game-over-modal');
+                    if (gameOverModal) gameOverModal.style.display = 'block';
+                } else {
                     resumeTimer();
                 }
             }
@@ -4479,6 +6145,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
+    // Shortens a username for display on the public leaderboard, keeping
+    // only the first 5 characters (4 for shorter names) and appending an
+    // ellipsis — this trims off the END of the name (not the start), so
+    // the visible prefix is always the real beginning of the username.
+    // Protects player privacy and keeps the list visually tidy.
+    function maskUsername(name) {
+        if (!name) return 'Guest';
+        const trimmed = name.trim();
+        if (trimmed.length <= 5) return trimmed;
+        return trimmed.slice(0, 5) + '···';
+    }
+
     // Fetches the top players from the server and renders them. Falls back
     // to a friendly message if the player isn't signed in with Pi, or if
     // the request fails for any reason (e.g. offline).
@@ -4506,22 +6184,60 @@ document.addEventListener('DOMContentLoaded', function() {
 
             noteEl.style.display = 'none';
             entries.forEach((entry, index) => {
+                const rankNum = index + 1;
+                const wins = entry.wins || 0;
+                const played = entry.gamesPlayed || 0;
+                const winRate = played > 0 ? Math.round((wins / played) * 100) : 0;
+                const points = Number.isFinite(entry.score) ? entry.score : wins;
+                const username = maskUsername(entry.username);
+
                 const li = document.createElement('li');
+                li.className = 'leaderboard-item';
+                if (rankNum <= 3) li.classList.add('leaderboard-top', `rank-${rankNum}`);
                 if (piUserUid && entry.uid === piUserUid) {
                     li.classList.add('leaderboard-me');
                 }
-                const rank = document.createElement('span');
+
+                const rank = document.createElement('div');
                 rank.className = 'leaderboard-rank';
-                rank.textContent = `#${index + 1}`;
-                const name = document.createElement('span');
+                if (rankNum <= 3) {
+                    rank.classList.add('leaderboard-medal');
+                    rank.innerHTML = ['🥇', '🥈', '🥉'][rankNum - 1];
+                } else {
+                    rank.textContent = `#${rankNum}`;
+                }
+
+                const info = document.createElement('div');
+                info.className = 'leaderboard-info';
+
+                const name = document.createElement('div');
                 name.className = 'leaderboard-name';
-                name.textContent = entry.username || 'Guest';
-                const score = document.createElement('span');
-                score.className = 'leaderboard-score';
-                score.textContent = `${entry.wins || 0} wins (${entry.gamesPlayed || 0} played)`;
+                const nameText = document.createElement('span');
+                nameText.className = 'leaderboard-username-text';
+                nameText.textContent = username;
+                name.appendChild(nameText);
+                if (entry.isVip) {
+                    const vipBadge = document.createElement('span');
+                    vipBadge.className = 'leaderboard-vip-badge';
+                    vipBadge.innerHTML = '<i class="fas fa-star"></i>';
+                    vipBadge.title = (typeof i18next !== 'undefined' && i18next.t) ? i18next.t('vipBadgeTooltip') : 'Pi VIP — Premium subscriber or has purchased premium content';
+                    name.appendChild(vipBadge);
+                }
+
+                const stats = document.createElement('div');
+                stats.className = 'leaderboard-stats';
+                stats.innerHTML = `<span class="leaderboard-wins"><i class="fas fa-award"></i> ${wins} wins</span><span class="leaderboard-dot">•</span><span class="leaderboard-played">${played} played</span><span class="leaderboard-dot">•</span><span class="leaderboard-winrate-inline">${winRate}%</span>`;
+
+                info.appendChild(name);
+                info.appendChild(stats);
+
+                const rate = document.createElement('div');
+                rate.className = 'leaderboard-winrate';
+                rate.innerHTML = `${points}<span class="leaderboard-points-label">pts</span>`;
+
                 li.appendChild(rank);
-                li.appendChild(name);
-                li.appendChild(score);
+                li.appendChild(info);
+                li.appendChild(rate);
                 listEl.appendChild(li);
             });
         } catch (err) {
@@ -4531,26 +6247,49 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // How many leaderboard points a win at each difficulty is worth.
+    // Ranking uses this weighted total (see submit-score.js /
+    // get-leaderboard.js) instead of raw win count, so a Hard/Expert win
+    // counts for more than an Easy one — raw "wins" is still shown in the
+    // UI as-is.
+    const DIFFICULTY_SCORE_WEIGHTS = { easy: 1, medium: 2, hard: 3, expert: 4 };
+
+    function calculateWeightedScore() {
+        const byDiff = comprehensiveStats.byDifficulty || {};
+        return Object.keys(DIFFICULTY_SCORE_WEIGHTS).reduce((total, level) => {
+            const wins = (byDiff[level] && byDiff[level].wins) || 0;
+            return total + wins * DIFFICULTY_SCORE_WEIGHTS[level];
+        }, 0);
+    }
+
     // Submits this player's current lifetime stats to the shared
     // leaderboard. Safe to call anytime; silently does nothing if the
     // player isn't signed in with Pi (no identity to attach the score to).
-    async function submitScoreToLeaderboard() {
-        if (!piAccessToken) return;
+    // Submits this game's result to the shared leaderboard using the
+    // signed game token issued at the start of the game (see
+    // requestGameToken / start-game.js). The server — not this function —
+    // is the source of truth for difficulty, timing, and the running
+    // totals; all we send is "here's the token for the game that just
+    // ended, and here's how it turned out". Safe to call anytime; does
+    // nothing if the player isn't signed in or no valid token exists for
+    // this game (e.g. an imported PGN).
+    async function submitScoreToLeaderboard(result) {
+        if (!piAccessToken || !currentGameToken) return;
+        const gameToken = currentGameToken;
+        currentGameToken = null; // single-use: never resend the same token
         try {
             await fetch('/.netlify/functions/submit-score', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     accessToken: piAccessToken,
-                    username: piUsername,
-                    wins: comprehensiveStats.overall.wins,
-                    gamesPlayed: comprehensiveStats.overall.gamesPlayed,
-                    winRate: comprehensiveStats.overall.winRate
+                    gameToken,
+                    result
                 }),
                 signal: AbortSignal.timeout(10000)
             });
         } catch (err) {
-            console.error('submitScoreToLeaderboard failed (will retry after the next game):', err);
+            console.error('submitScoreToLeaderboard failed:', err);
         }
     }
     
@@ -4565,7 +6304,13 @@ document.addEventListener('DOMContentLoaded', function() {
                         wins: 0,
                         losses: 0,
                         draws: 0,
-                        winRate: 0
+                        winRate: 0,
+                        totalHintsUsed: 0,
+                        totalUndosUsed: 0,
+                        totalThreatsUsed: 0,
+                        totalExtraTimeUsed: 0,
+                        currentStreak: 0,
+                        bestStreak: 0
                     },
                     byDifficulty: {
                         easy: { gamesPlayed: 0, wins: 0, losses: 0, draws: 0, bestTime: null, fastestWin: null },
@@ -4577,7 +6322,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         result: '',
                         timeUsed: '',
                         moves: 0,
-                        difficulty: ''
+                        difficulty: '',
+                        hintsUsed: 0,
+                        undosUsed: 0,
+                        threatsUsed: 0,
+                        extraTimeUsed: 0
                     }
                 };
                 saveComprehensiveStats();
