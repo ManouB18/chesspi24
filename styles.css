@@ -1,0 +1,2815 @@
+/* styles.css */
+:root {
+    --light-square-bg: #f0d9b5;
+    --dark-square-bg: #b58863;
+    --selected-bg: #fff176;
+    --last-move-bg: #ffa;
+    --threatened-bg: #ff6b6b;
+    --protected-bg: #6b8eff;
+    --low-threat-bg: #90EE90;
+    --medium-threat-bg: #FFA500;
+    --high-threat-bg: #FF4500;
+    --potential-threat-bg: #FFD700;
+    --primary-color: #2b70c5;
+    --secondary-color: #f1911b;
+    --success-color: #4CAF50;
+    --danger-color: #f44336;
+    --warning-color: #ffc107;
+    --light-color: #f8f9fa;
+    --dark-color: #343a40;
+    --transition: all 0.3s ease;
+    --hint-from-bg: #ffff00; /* Yellow for from square */
+    --hint-to-bg: #00ff00; /* Green for to square */
+}
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+html {
+    height: 100%;
+    width: 100%;
+}
+body {
+    background: linear-gradient(135deg, #87ceeb, #b0e2ff, #87ceeb);
+    color: #333;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    margin: 0;
+    padding: 0;
+}
+.app-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    box-sizing: border-box;
+}
+.page {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.5s ease, visibility 0.5s;
+    padding: 20px;
+    text-align: center;
+}
+.page.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* ---- Very small / very old screens (e.g. old feature phones, BlackBerry
+   8300 in landscape, early Android/iPhone devices with short viewports).
+   Rather than clipping content that simply can't all fit on one screen,
+   make each page scrollable internally so every element stays reachable,
+   and shrink the board further to reduce how much scrolling is needed. ---- */
+@media (max-height: 550px) {
+    .page {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        justify-content: flex-start;
+        padding: 8px;
+    }
+    .welcome-page {
+        justify-content: center;
+    }
+    .chessboard {
+        width: 70vmin;
+        height: 70vmin;
+        max-width: 320px;
+        max-height: 320px;
+        font-size: calc(70vmin / 8 * 0.9);
+    }
+    .side-indicator-row {
+        width: 70vmin;
+        max-width: 320px;
+    }
+    .board-container {
+        margin-top: 4px;
+        margin-bottom: 4px;
+    }
+    .game-info-container {
+        padding: 3px 12px;
+        margin-bottom: 4px;
+    }
+    .controls-bottom {
+        padding: 4px 10px;
+        gap: 1px;
+    }
+    .control-icon {
+        padding: 4px 2px;
+    }
+    .control-icon i {
+        width: 24px;
+        height: 24px;
+        font-size: 13px;
+        margin-bottom: 2px;
+    }
+    .control-icon span {
+        font-size: 9px;
+    }
+}
+.welcome-page {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+.welcome-content {
+    text-align: center;
+    animation: fadeIn 1s ease;
+}
+.welcome-logo {
+    width: 200px;
+    height: auto;
+    margin-bottom: 20px;
+}
+.welcome-title {
+    font-size: 3.5rem;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    color: #2c3e50;
+}
+.welcome-subtitle {
+    font-size: 1.8rem;
+    margin-bottom: 40px;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+    color: #34495e;
+    line-height: 1.6;
+}
+.progress-bar {
+    width: 300px;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.5);
+    border-radius: 3px;
+    margin: 0 auto;
+    overflow: hidden;
+}
+.progress {
+    height: 100%;
+    width: 0%;
+    background: var(--primary-color);
+    border-radius: 3px;
+    transition: width 5s linear;
+}
+.language-page {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+.page-title {
+    font-size: 2.5rem;
+    margin-bottom: 30px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    color: #2c3e50;
+}
+.options-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+.option-card {
+    width: 150px;
+    height: 200px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 10px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition);
+    backdrop-filter: blur(5px);
+    border: 2px solid transparent;
+    position: relative;
+}
+.option-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--primary-color);
+    background: rgba(255, 255, 255, 0.4);
+}
+.option-card.selected {
+    border-color: var(--primary-color);
+    background: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 0 15px rgba(44, 62, 80, 0.3);
+}
+.option-card.locked {
+    filter: grayscale(0.7);
+    opacity: 0.8;
+}
+.option-card.locked:hover {
+    transform: none;
+    border-color: transparent;
+}
+.lock-overlay {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    z-index: 2;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    transition: var(--transition);
+}
+/* Once a previously-locked item is purchased/unlocked, renderLockState()
+   in script.js swaps this badge's icon from a closed padlock (fa-lock) to
+   an open one (fa-lock-open) and adds .unlocked-badge, instead of just
+   removing the .locked class from the card and leaving the closed-lock
+   icon showing. Green ties it visually to "purchased" the same way the
+   rest of the UI uses green for success/confirmation. */
+.lock-overlay.unlocked-badge {
+    background: rgba(39, 174, 96, 0.85);
+}
+.option-icon {
+    font-size: 3rem;
+    margin-bottom: 15px;
+    color: #2c3e50;
+}
+.option-piece-preview {
+    width: 3.2rem;
+    height: 3.2rem;
+    object-fit: contain;
+    margin-bottom: 15px;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+.option-name {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #2c3e50;
+}
+.option-desc {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    margin-top: 5px;
+    color: #34495e;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+    min-height: 2.4em;
+}
+.navigation-dots {
+    display: flex;
+    gap: 10px;
+    position: absolute;
+    bottom: 20px;
+}
+.dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: var(--transition);
+}
+.dot.active {
+    background: var(--primary-color);
+    transform: scale(1.2);
+}
+.game-page {
+    background-color: #3a2317;
+    background-image: url('board-bg.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    justify-content: flex-start;
+    user-select: none;
+}
+.container {
+    max-width: 100%;
+    height: 100%;
+    margin: 0 auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+.game-container {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    overflow: visible;
+    padding-bottom: calc(env(safe-area-inset-bottom) + 4px);
+}
+
+.board-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-grow: 1;
+    overflow: visible;
+    position: relative;
+    min-height: 0;
+    margin-top: 6px;
+    margin-bottom: 6px;
+}
+.chessboard {
+    width: 96vmin;
+    height: 96vmin;
+    max-width: 650px;
+    max-height: 550px;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    border: 5px solid #333;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    background-color: white;
+    aspect-ratio: 1 / 1;
+    flex-shrink: 0;
+    font-size: calc(96vmin / 8 * 0.9);
+    overflow: visible;
+    position: relative;
+}
+.square {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+.square.white {
+    background-color: var(--light-square-bg);
+}
+.square.black {
+    background-color: var(--dark-square-bg);
+}
+/* Chess.com-style board coordinates: rank numbers (top-left of the left
+   edge squares) and file letters (bottom-right of the bottom edge squares).
+   Colors automatically use each square's OPPOSITE color for contrast, and
+   follow whichever theme is active since they read the same CSS variables
+   used for the squares themselves. */
+.square[data-rank]::before {
+    content: attr(data-rank);
+    position: absolute;
+    top: 2px;
+    left: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 2;
+}
+.square[data-file]::after {
+    content: attr(data-file);
+    position: absolute;
+    bottom: 2px;
+    right: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 2;
+}
+.square.white[data-rank]::before,
+.square.white[data-file]::after {
+    color: var(--dark-square-bg);
+}
+.square.black[data-rank]::before,
+.square.black[data-file]::after {
+    color: var(--light-square-bg);
+}
+.square.selected {
+    background-color: var(--selected-bg);
+    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.35);
+    z-index: 2;
+}
+.move-marker {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 1;
+}
+.move-marker.valid-marker {
+    width: 24%;
+    height: 24%;
+    background-color: rgba(20, 20, 20, 0.5);
+}
+.move-marker.capture-marker {
+    width: 86%;
+    height: 86%;
+    background-color: transparent;
+    border: 4px solid rgba(20, 20, 20, 0.5);
+    box-sizing: border-box;
+}
+.square.last-move {
+    background-color: var(--last-move-bg) !important;
+    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.2);
+}
+.square.check {
+    background-color: #ff6b6b !important;
+}
+.theme-blue .square.check {
+    background-color: #ff0000 !important;
+}
+.square.threatened {
+    background-color: var(--threatened-bg);
+}
+.square.protected {
+    background-color: var(--protected-bg);
+}
+.square.hint-from {
+    background-color: var(--hint-from-bg) !important;
+    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25);
+}
+.square.hint-to {
+    background-color: var(--hint-to-bg) !important;
+    box-shadow: inset 0 0 0 2px rgba(0, 0, 0, 0.25);
+}
+.piece {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: inherit;
+    transition: transform 0.2s;
+}
+.piece-img {
+    width: 85%;
+    height: 85%;
+    object-fit: contain;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    -webkit-user-select: none;
+}
+
+.controls-bottom {
+    display: flex;
+    justify-content: space-around; 
+    align-items: center;
+    padding: 10px 16px; 
+    background-color: white;
+    /* Fully rounded "stadium/pill" bar, matching .game-info-container
+       above — extra horizontal padding (16px vs the old 5px) keeps the
+       end buttons from crowding the now much more rounded corners. */
+    border-radius: 999px;
+    margin-top: 5px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 20;
+    gap: 4px;
+    flex-wrap: nowrap;
+}
+.control-icon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    padding: 8px 6px;
+    /* Rounded pill-shaped button "well" around each icon+label, always
+       visible (not just on hover) — matches the reference bottom-nav
+       style where every entry sits in its own soft rounded button. */
+    border-radius: 999px;
+    background-color: #f4f6f9;
+    transition: background-color 0.2s, transform 0.15s ease;
+    position: relative;
+    flex: 1; 
+    max-width: 80px; 
+}
+
+.control-icon:hover {
+    background-color: #e9edf3;
+}
+.control-icon:active {
+    transform: scale(0.95);
+}
+.control-icon i {
+    font-size: 16px;
+    line-height: 1;
+    margin-bottom: 5px;
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #4a90d9, #2b70c5);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+    transition: transform 0.2s ease;
+}
+.control-icon:hover i {
+    transform: translateY(-2px);
+}
+.control-icon span {
+    font-size: 11px;
+    text-align: center;
+    font-weight: 500;
+}
+.feature-count {
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    position: absolute;
+    top: -5px;
+    right: -5px;
+}
+.control-icon.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.control-icon.disabled:hover {
+    background-color: transparent;
+}
+/* Pi coin icon + purple branding for the Refill button */
+.pi-coin-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #8247e5, #5b2c99);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-weight: bold;
+    font-size: 17px;
+    margin-bottom: 5px;
+    box-shadow: 0 2px 5px rgba(91, 44, 153, 0.4);
+}
+#refill-btn span {
+    color: #6a2fb0;
+    font-weight: 600;
+}
+/* Grabs attention once every feature is fully depleted, nudging the player
+   toward using the Pi payment refill: the whole button glows/blinks, the
+   coin gently pulses, and the "Refill" label blinks on and off. */
+@keyframes refillButtonBlink {
+    0%, 100% {
+        background-color: transparent;
+        box-shadow: none;
+    }
+    50% {
+        background-color: rgba(130, 71, 229, 0.18);
+        box-shadow: 0 0 14px 4px rgba(130, 71, 229, 0.6);
+    }
+}
+@keyframes refillCoinPulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(130, 71, 229, 0.55);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(130, 71, 229, 0);
+        transform: scale(1.1);
+    }
+}
+@keyframes refillTextBlink {
+    0%, 45% {
+        opacity: 1;
+    }
+    55%, 100% {
+        opacity: 0;
+    }
+}
+#refill-btn.attention {
+    animation: refillButtonBlink 1.2s ease-in-out infinite;
+    border-radius: 8px;
+}
+#refill-btn.attention .pi-coin-icon {
+    animation: refillCoinPulse 1.2s ease-in-out infinite;
+}
+#refill-btn.attention span {
+    animation: refillTextBlink 1.2s steps(1) infinite;
+}
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    animation: fadeIn 0.3s;
+}
+.modal-content {
+    background-color: white;
+    margin: 8vh auto;
+    padding: 20px;
+    border-radius: 10px;
+    width: 80%;
+    max-width: 500px;
+    max-height: 84vh;
+    overflow-y: auto;
+    position: relative;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    animation: scaleIn 0.3s;
+}
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.close:hover {
+    color: black;
+}
+/* ===== Live in-game board/piece settings modal ===== */
+.game-settings-modal-content {
+    text-align: left;
+    padding: 16px 18px;
+    margin: 5vh auto;
+}
+.game-settings-modal-content h2 {
+    text-align: center;
+    margin: 0 0 4px;
+    font-size: 19px;
+}
+.game-settings-modal-desc {
+    text-align: center;
+    color: #666;
+    font-size: 11px;
+    margin: 0 0 12px;
+    line-height: 1.3;
+}
+.settings-section + .settings-section {
+    margin-top: 10px;
+}
+.settings-section-title {
+    font-size: 11px;
+    color: #2c3e50;
+    margin: 0 0 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+/* Fixed 4-column grid (never auto-fill/wrap) — every category here has
+   exactly 4 items, so this guarantees a single row per section no matter
+   how narrow the screen is; items just shrink to fit instead of a 4th
+   item wrapping onto a second row. That wrapping was exactly what forced
+   the whole modal to scroll before: 3 sections x 2 rows each didn't fit
+   on one screen, but 3 sections x 1 row each does. */
+.settings-swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+}
+.settings-swatch {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: var(--transition);
+    background-size: cover;
+    background-position: center;
+}
+.settings-swatch:hover {
+    transform: translateY(-2px);
+}
+.settings-swatch.selected {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(43, 112, 197, 0.3);
+}
+.settings-swatch.locked {
+    /* Keep the swatch's own theme/piece-set color fully visible even while
+       locked — the lock badge (see .swatch-lock-badge below) is what
+       communicates "locked", not a grayed-out card. A full desaturating
+       filter here was hiding the theme color on every locked card (i.e.
+       most of them for a non-Premium player), which is what made the
+       Themes grid look uncolored. */
+    opacity: 0.92;
+}
+.settings-swatch .swatch-piece-preview {
+    width: 60%;
+    height: 60%;
+    object-fit: contain;
+    pointer-events: none;
+}
+.settings-swatch .swatch-lock-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+}
+/* Once purchased/unlocked, buildSwatchLockBadge() in script.js swaps this
+   badge's icon to an open padlock and adds this class — same green used
+   for .lock-overlay.unlocked-badge on the theme/pieceset/bot selection
+   pages, so "you own this" reads identically everywhere in the app. */
+.settings-swatch .swatch-lock-badge.unlocked-badge {
+    background: rgba(39, 174, 96, 0.85);
+}
+.settings-swatch .swatch-label {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 8px;
+    font-weight: 600;
+    text-align: center;
+    padding: 1px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Theme swatches: each card is a solid, unmistakable block of its theme's
+   color (not a subtle split) so the Brown/Green/Pink/Blue cards are
+   instantly recognizable as brown/green/pink/blue at a glance. */
+.settings-swatch.theme-swatch-brown { background: linear-gradient(145deg, #d9b78e, #a97a4a); }
+.settings-swatch.theme-swatch-green { background: linear-gradient(145deg, #9fcf7a, #5c8a41); }
+.settings-swatch.theme-swatch-pink { background: linear-gradient(145deg, #f2b4c1, #d16f89); }
+.settings-swatch.theme-swatch-blue { background: linear-gradient(145deg, #9dc6ea, #4f83b3); }
+.settings-swatch.pieceset-swatch {
+    background-color: #f4f1ec;
+}
+.settings-swatch.bot-swatch {
+    background-color: #f4f1ec;
+    flex-direction: column;
+    gap: 2px;
+}
+/* Direct child only — this must NOT also match the lock badge's own <i>
+   (nested one level deeper inside .swatch-lock-badge), otherwise the lock
+   icon inherits this 16px/dark styling instead of the small white/green
+   badge look shared with the theme and piece-set swatches. */
+.settings-swatch.bot-swatch > i {
+    font-size: 16px;
+    color: #2c3e50;
+    pointer-events: none;
+}
+/* Apply row: selections in the modal above are staged (just the "selected"
+   outline moves) until this button is pressed, which is what actually
+   commits them to the board/game. */
+.game-settings-apply-row {
+    display: flex;
+    justify-content: center;
+    margin-top: 14px;
+}
+.game-settings-apply-btn {
+    width: 100%;
+    margin: 0;
+    padding: 11px 20px;
+}
+
+.nav-button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: bold;
+    margin: 10px;
+    transition: background-color 0.3s;
+    font-size: 16px;
+}
+.nav-button:hover {
+    background-color: #1a5a9e;
+}
+.settings-buttons {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
+}
+.features-modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    animation: fadeIn 0.3s;
+}
+.features-content {
+    background-color: #fefefe;
+    margin: 5% auto;
+    padding: 20px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 600px;
+    color: #333;
+    position: relative;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    animation: scaleIn 0.3s;
+}
+.features-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+}
+.features-header h2 {
+    color: var(--primary-color);
+    margin: 0;
+}
+.features-close {
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.features-close:hover {
+    color: black;
+}
+.features-section {
+    margin-bottom: 25px;
+}
+.features-section h3 {
+    color: var(--primary-color);
+    margin-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+    display: flex;
+    align-items: center;
+}
+.features-section h3 i {
+    margin-right: 10px;
+    font-size: 1.2rem;
+}
+.features-section p {
+    margin-bottom: 10px;
+    line-height: 1.6;
+}
+.features-list {
+            list-style-type: none; 
+            padding: 0;
+            margin: 10px 0;
+        }
+        
+        .features-list li {
+            margin-bottom: 10px;
+            padding: 8px 10px;
+            background-color: white;
+            border-radius: 5px;
+            border-right: 3px solid var(--primary-color);
+            transition: all 0.3s ease;
+        }
+.features-list li:before {
+    content: "•";
+    color: var(--primary-color);
+    font-weight: bold;
+    position: absolute;
+    left: 0;
+    font-size: 20px;
+}
+/* "Blue" theme: Chess.com-style "Pillow" board — puffy, cushioned-looking
+   squares, achieved with a soft gradient + inset shadow for a 3D effect. */
+.theme-blue .square.white {
+    background: linear-gradient(145deg, #eaf3fb, #c9dfef);
+    box-shadow: inset 2px 2px 5px rgba(255, 255, 255, 0.8),
+                inset -2px -2px 5px rgba(0, 0, 0, 0.12);
+}
+.theme-blue .square.black {
+    background: linear-gradient(145deg, #7fb0d6, #5a8ebb);
+    box-shadow: inset 2px 2px 5px rgba(255, 255, 255, 0.25),
+                inset -2px -2px 5px rgba(0, 0, 0, 0.25);
+}
+.nav-arrows {
+    position: fixed;
+    bottom: 30px;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 30px;
+    z-index: 100;
+    pointer-events: none;
+}
+.nav-arrow {
+    width: 50px;
+    height: 50px;
+    background-color: rgba(255, 255, 255, 0.7);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: var(--primary-color);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    pointer-events: auto;
+}
+.nav-arrow:hover {
+    background-color: var(--primary-color);
+    color: white;
+    transform: scale(1.1);
+}
+.nav-arrow.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+#pi-payment-modal .modal-content {
+    background-color: #fefefe;
+    padding: 20px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 400px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(5px);
+}
+#pi-payment-modal h2 {
+    color: var(--primary-color);
+    margin-bottom: 20px;
+}
+#pi-payment-modal .close {
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    font-size: 28px;
+    cursor: pointer;
+}
+#pi-payment-modal .nav-button {
+    margin-top: 20px;
+    padding: 12px 24px;
+    font-size: 16px;
+}
+
+.game-info-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    max-width: 650px;
+    margin: 0 auto 10px auto;
+    padding: 5px 14px;
+    background-color: white;
+    /* Fully rounded "stadium/pill" bar (large radius always clips to a
+       true pill regardless of the bar's actual height) instead of the
+       previous mild 15px corner rounding. */
+    border-radius: 999px;
+    box-shadow: 0 3px 15px rgba(0, 0, 0, 0.1);
+    z-index: 20;
+    position: relative;
+}
+/* Invisible row that spans the exact same width/position as the board,
+   purely so its content can be left-aligned with the board's left edge. */
+.side-indicator-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    width: 96vmin;
+    max-width: 650px;
+    margin: 0 auto;
+    box-sizing: border-box;
+    overflow: visible;
+    position: relative;
+}
+/* The actual visible "pill" - sized to fit its own content only. Never
+   shrinks below its natural width (flex-shrink: 0) — previously the
+   default flex-shrink:1 let the promo-message next to it (see below)
+   squeeze this pill down, which had nowhere to give except wrapping the
+   bot's name onto two lines. */
+.side-indicator-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: bold;
+    font-size: 14px;
+    color: #2c3e50;
+    background-color: white;
+    border-radius: 10px;
+    padding: 6px 14px;
+    width: fit-content;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    opacity: 0.55;
+    transition: opacity 0.25s ease, box-shadow 0.25s ease;
+}
+.side-indicator-row.active .side-indicator-pill {
+    opacity: 1;
+    box-shadow: 0 3px 12px rgba(43, 112, 197, 0.35);
+}
+#player-text {
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Same one-line guarantee as #player-text above, for the bot's name — this
+   is what actually keeps "Aggressive Attacker" (or any bot personality
+   name) from wrapping in the first place; flex-shrink: 0 on the pill above
+   only stops the *pill* from shrinking, not the text inside it from
+   wrapping if there were ever still not enough room. */
+#bot-text {
+    white-space: nowrap;
+}
+/* Motivational promo message that briefly appears next to the Bot AI
+   indicator (e.g. when features run out, or time is almost up). */
+/* Motivational promo message that briefly appears next to the Bot AI
+   indicator (e.g. when features run out, or time is almost up).
+   Positioned absolutely (anchored to the row's right edge, vertically
+   centered on the pill) so it floats OVER the layout instead of
+   participating in it — its own height (it can wrap onto 2 lines on
+   narrow screens) used to add to .side-indicator-row's flex height and
+   push the whole board down for as long as it was visible; as an overlay
+   it can never do that, no matter how much text it wraps to. */
+.promo-message {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    margin-left: 0;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #8247e5, #5b2c99);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(91, 44, 153, 0.4);
+    opacity: 0;
+    transform: translateY(-50%) translateY(-4px);
+    pointer-events: none;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    max-width: 60%;
+    overflow-wrap: break-word;
+    text-align: right;
+    z-index: 30;
+}
+.promo-message.visible {
+    opacity: 1;
+    transform: translateY(-50%) translateY(0);
+}
+.top-controls {
+    display: flex;
+    gap: 5px;
+    margin-left: auto; 
+}
+.left-controls {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    margin-right: auto;
+}
+.player-color-indicator {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    margin-right: 0;
+}
+.player-white {
+    background-color: #f0d9b5;
+    border: 2px solid #b58863;
+}
+.player-black {
+    background-color: #b58863;
+    border: 2px solid #2c3e50;
+}
+.game-timer {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+.game-timer-label {
+    font-size: 11px;
+    color: #666;
+    margin-bottom: 2px;
+}
+
+/* ---- START OF MODIFICATION ---- */
+.game-timer-display {
+    font-size: 18px;
+    font-weight: bold;
+    color: #2c3e50;
+    font-family: monospace;
+    background-color: transparent; /* Changed to transparent */
+}
+/* ---- END OF MODIFICATION ---- */
+
+@media (max-width: 768px) {
+    .welcome-title {
+        font-size: 2.5rem;
+    }
+   .welcome-subtitle {
+        font-size: 1.4rem;
+    }
+    .welcome-logo {
+        width: 150px;
+    }
+    .page-title {
+        font-size: 2rem;
+    }
+    .option-card {
+        width: 130px;
+        height: 180px;
+    }
+    .option-icon {
+        font-size: 2.5rem;
+    }
+    .option-piece-preview {
+        width: 2.6rem;
+        height: 2.6rem;
+    }
+    .option-desc {
+        font-size: 0.8rem;
+        min-height: 2.2em;
+        line-height: 1.1;
+    }
+    .chessboard {
+        width: 96vmin;
+        height: 96vmin;
+        font-size: calc(96vmin / 8 * 0.9);
+    }
+    .side-indicator-row {
+        width: 96vmin;
+    }
+/* ---- START OF MODIFICATION ---- */
+    .controls-bottom {
+        padding: 6px 10px;
+        gap: 1px; 
+    }
+/* ---- END OF MODIFICATION ---- */
+    .control-icon {
+        padding: 6px 2px; 
+        min-width: auto; 
+    }
+    .control-icon i {
+        font-size: 14px;
+        width: 26px;
+        height: 26px;
+        margin-bottom: 3px;
+    }
+    .control-icon span {
+        font-size: 10px; 
+    }
+    
+    .nav-arrows {
+        padding: 0 15px;
+    }
+    .nav-arrow {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+    }
+    .feature-count {
+        width: 18px;
+        height: 18px;
+        font-size: 11px;
+    }
+
+    .game-timer-label {
+        font-size: 10px;
+    }
+    .game-timer-display {
+        font-size: 16px;
+    }
+}
+
+@media (max-width: 380px) {
+    .square[data-rank]::before,
+    .square[data-file]::after {
+        font-size: 8px;
+    }
+    .control-icon i {
+        font-size: 12px;
+        width: 22px;
+        height: 22px;
+    }
+    .control-icon span {
+        font-size: 9px; 
+    }
+    .option-card {
+        width: 110px;
+        height: 160px;
+    }
+    .option-desc {
+        font-size: 0.75rem;
+        min-height: 2em;
+    }
+}
+
+html.device-tablet .game-container {
+    justify-content: center;
+}
+html.device-tablet .chessboard {
+    width: 60vmin;
+    height: 60vmin;
+}
+html.device-tablet .side-indicator-row {
+    width: 60vmin;
+}
+html.device-tablet .game-status {
+    height: 30px;
+    line-height: 15px;
+    margin: 5px auto;
+}
+html.device-tablet .board-container {
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+html.device-tablet .control-icon i {
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+}
+html.device-tablet .control-icon span {
+    font-size: 13px;
+}
+html.device-tablet .feature-count {
+    width: 22px;
+    height: 22px;
+    font-size: 13px;
+}
+@keyframes moveAnimation {
+    from { opacity: 0.7; transform: scale(1.1); }
+    to { opacity: 1; transform: scale(1); }
+}
+.piece.moved {
+    animation: moveAnimation 0.3s ease-in-out;
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+}
+@keyframes optionClick {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.95); }
+    100% { transform: scale(1); }
+}
+.option-card.clicked {
+    animation: optionClick 0.3s ease;
+}
+.timer-container {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 8px 12px;
+    border-radius: 20px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+    font-weight: bold;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    display: none;
+}
+.timer-label {
+    font-size: 12px;
+    margin-bottom: 4px;
+    color: #666;
+    display: none;
+}
+.timer-display {
+    font-size: 16px;
+    color: #2c3e50;
+    display: none;
+}
+.timer-low {
+    color: #f44336;
+    animation: pulse 1s infinite;
+}
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+.difficulty-time-info {
+    font-size: 12px;
+    margin-top: 5px;
+    color: #666;
+}
+
+.top-controls .control-icon,
+.left-controls .control-icon {
+    min-width: 45px;
+    padding: 4px 3px;
+}
+.game-status {
+    background-color: transparent;
+    box-shadow: none;
+    border-radius: 10px;
+    padding: 5px;
+    margin-top: 5px;
+    text-align: center;
+    font-weight: bold;
+    max-width: 650px;
+    margin: 5px auto;
+    height: 30px;
+    line-height: 30px;
+    overflow: hidden;
+    display: block;
+}
+.game-status.in-check {
+    color: #e53935;
+    animation: checkBlink 1s ease-in-out infinite;
+}
+@keyframes checkBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+.threat-report {
+    display: none;
+    max-width: 650px;
+    margin: 0 auto 8px auto;
+    padding: 8px 14px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-left: 4px solid var(--primary-color);
+    border-radius: 8px;
+    text-align: left;
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-line;
+    color: #2c3e50;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    animation: fadeIn 0.3s ease;
+}
+.threat-report.visible {
+    display: block;
+}
+.threat-report.safe {
+    border-left-color: var(--success-color);
+}
+.game-over-modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+}
+.game-over-content {
+    background-color: #fefefe;
+    margin: 15% auto;
+    padding: 20px;
+    border-radius: 10px;
+    width: 80%;
+    max-width: 400px;
+    text-align: center;
+}
+.game-over-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+}
+/* New styles for enhanced threats */
+.square.low-threat {
+    background-color: var(--low-threat-bg) !important;
+}
+.square.medium-threat {
+    background-color: var(--medium-threat-bg) !important;
+}
+.square.high-threat {
+    background-color: var(--high-threat-bg) !important;
+    animation: pulse-danger 1s infinite;
+}
+.square.hanging-threat {
+    box-shadow: inset 0 0 0 4px #ff0000, 0 0 14px 3px rgba(255, 0, 0, 0.7);
+    animation: pulse-danger 0.6s infinite;
+}
+.square.potential-threat {
+    background: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 5px,
+        var(--potential-threat-bg) 5px,
+        var(--potential-threat-bg) 10px
+    );
+}
+.square.defended {
+    box-shadow: inset 0 0 0 3px var(--protected-bg);
+}
+.threat-source {
+    box-shadow: 0 0 0 3px #ff0000;
+    animation: pulse-threat 2s infinite;
+}
+.board-arrow-shaft.threat-arrow {
+    background-color: rgba(255, 0, 0, 0.7);
+}
+.board-arrow-head.threat-arrow-head {
+    color: rgba(255, 0, 0, 0.7);
+}
+.threat-info-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 8px;
+}
+.threat-info-title {
+    font-weight: bold;
+    color: var(--primary-color);
+    font-size: 18px;
+}
+.threat-info-content {
+    margin-bottom: 10px;
+}
+.threat-info-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+.threat-info-list li {
+    padding: 5px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+.threat-info-list li:last-child {
+    border-bottom: none;
+}
+.threat-tip {
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 10px;
+    font-style: italic;
+    border-left: 3px solid var(--primary-color);
+}
+.threat-level-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+.threat-level-low {
+    background-color: var(--low-threat-bg);
+}
+.threat-level-medium {
+    background-color: var(--medium-threat-bg);
+}
+.threat-level-high {
+    background-color: var(--high-threat-bg);
+}
+.threat-level-potential {
+    background: repeating-linear-gradient(
+        45deg,
+        var(--potential-threat-bg),
+        var(--potential-threat-bg) 5px,
+        #ffffff 5px,
+        #ffffff 10px
+    );
+}
+@keyframes pulse-danger {
+    0% { opacity: 0.7; }
+    50% { opacity: 1; }
+    100% { opacity: 0.7; }
+}
+@keyframes pulse-threat {
+    0% { box-shadow: 0 0 0 3px rgba(255, 0, 0, 0.7); }
+    50% { box-shadow: 0 0 0 6px rgba(255, 0, 0, 0.4); }
+    100% { box-shadow: 0 0 0 3px rgba(255, 0, 0, 0.7); }
+}
+/* Advice modal styles */
+.advice-modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    animation: fadeIn 0.3s;
+}
+.advice-content {
+    background-color: #fefefe;
+    margin: 5% auto;
+    padding: 20px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 600px;
+    color: 333;
+    position: relative;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    animation: scaleIn 0.3s;
+}
+.advice-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+}
+.advice-header h2 {
+    color: var(--primary-color);
+    margin: 0;
+}
+.advice-close {
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.advice-close:hover {
+    color: black;
+}
+.advice-section {
+    margin-bottom: 25px;
+}
+.advice-section h3 {
+    color: var(--primary-color);
+    margin-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 5px;
+    display: flex;
+    align-items: center;
+}
+.advice-section h3 i {
+    margin-right: 10px;
+    font-size: 1.2rem;
+}
+.advice-section p {
+    margin-bottom: 10px;
+    line-height: 1.6;
+}
+.advice-list {
+    list-style-type: none;
+    padding-left: 20px;
+    margin-top: 10px;
+}
+.advice-list li {
+    margin-bottom: 8px;
+    position: relative;
+    padding-left: 25px;
+}
+.advice-list li:before {
+    content: "•";
+    color: var(--primary-color);
+    font-weight: bold;
+    position: absolute;
+    left: 0;
+    font-size: 20px;
+}
+.advice-tip {
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 10px;
+    font-style: italic;
+    border-left: 3px solid var(--primary-color);
+}
+@media (max-width: 768px) {
+    .advice-content {
+        width: 95%;
+        margin: 10% auto;
+        padding: 15px;
+    }
+}
+
+/* Puzzle Mode */
+.puzzle-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+.puzzle-body .chessboard {
+    width: 100%;
+    max-width: 420px;
+}
+.puzzle-rating-badge {
+    font-size: 0.85rem;
+    font-weight: normal;
+    color: #888;
+    margin-left: 8px;
+}
+.puzzle-feedback {
+    min-height: 1.4em;
+    font-weight: 600;
+    text-align: center;
+    color: #444;
+}
+.puzzle-feedback.correct {
+    color: #2e7d32;
+}
+.puzzle-feedback.wrong {
+    color: #c62828;
+}
+.square.legal-move::after {
+    content: "";
+    position: absolute;
+    width: 28%;
+    height: 28%;
+    border-radius: 50%;
+    background-color: rgba(0, 0, 0, 0.18);
+    pointer-events: none;
+}
+
+/* Mode Select page */
+.mode-select-page .options-container {
+    flex-direction: column;
+    gap: 16px;
+}
+.option-card.mode-card {
+    width: 260px;
+    padding: 24px 20px;
+}
+.option-card.mode-card .option-icon {
+    font-size: 2.2rem;
+    margin-bottom: 10px;
+    display: block;
+}
+.option-card.mode-card .option-name {
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+.option-card.mode-card .option-desc {
+    font-size: 0.85rem;
+    color: #888;
+    margin-top: 4px;
+}
+
+/* Puzzles page (own top-level page now, not a modal) */
+.puzzles-page-header {
+    margin-bottom: 10px;
+}
+.puzzle-back-btn {
+    margin-top: 16px;
+}
+.puzzle-stats-row {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    align-items: center;
+    margin-top: 4px;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+.puzzle-points-display {
+    color: #b8860b;
+}
+.puzzle-mate-counter {
+    display: inline-flex;
+    background: #c0392b;
+    color: white;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+}
+.puzzle-endgame-tip {
+    max-width: 420px;
+    text-align: center;
+    font-size: 0.85rem;
+    color: #666;
+    background: #fdf6e3;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-top: 6px;
+}
+.puzzle-actions-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+.puzzle-hint-btn {
+    background: #f0ad4e;
+}
+
+/* Puzzle board: intentionally larger than the bot board, and forced to
+   the classic brown palette regardless of whichever theme the player
+   picked for the bot game — the two boards don't share a page, so there
+   is no reason for a puzzle board to be pink or blue. */
+#puzzle-chessboard, #rush-chessboard {
+    --light-square-bg: #f0d9b5;
+    --dark-square-bg: #b58863;
+}
+.puzzle-chessboard-large {
+    width: 98vmin;
+    max-width: 720px;
+    max-height: 640px;
+}
+
+/* Puzzle type / difficulty selection pages */
+.puzzle-type-card .option-icon,
+.puzzle-difficulty-card .option-icon {
+    font-size: 1.8rem;
+}
+
+/* Puzzle Rush */
+.rush-mode-select {
+    flex-direction: column;
+    gap: 14px;
+}
+.rush-stats-row {
+    gap: 22px;
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+.rush-stat i {
+    margin-right: 4px;
+}
+#rush-mistakes-display i {
+    color: #c0392b;
+}
+.rush-results {
+    text-align: center;
+    max-width: 420px;
+}
+.rush-results h3 {
+    margin-bottom: 8px;
+}
+.rush-best-line {
+    font-weight: 600;
+    margin: 10px 0;
+}
+/* Promotion Modal Styles */
+.promotion-options {
+    display: flex;
+    justify-content: space-around;
+    margin: 20px 0;
+}
+.promotion-options button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px;
+    font-size: 1.2rem;
+    background: var(--light-color);
+    border: 1px solid var(--primary-color);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+.promotion-options button:hover {
+    background: var(--primary-color);
+    color: white;
+}
+.promotion-options span {
+    font-size: 3rem;
+    margin-bottom: 5px;
+}
+#promotion-modal .options-container {
+    flex-wrap: wrap;
+    justify-content: center;
+}
+#promotion-modal .option-card {
+    width: 100px;
+    height: 150px;
+}
+#promotion-modal .option-icon {
+    font-size: 2.5rem;
+}
+#promotion-modal .option-name {
+    font-size: 1rem;
+}
+@media (max-width: 480px) {
+    #promotion-modal .option-card {
+        width: 80px;
+        height: 120px;
+    }
+    #promotion-modal .option-icon {
+        font-size: 2rem;
+    }
+    #promotion-modal .option-name {
+        font-size: 0.9rem;
+    }
+}
+
+/* Statistics Modal Styles - MODIFIED FOR SCROLLABLE CONTENT */
+.stats-content {
+    background-color: #fefefe;
+    margin: 5% auto;
+    padding: 20px;
+    border-radius: 10px;
+    width: 90%;
+    max-width: 400px;
+    color: #333;
+    position: relative;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    animation: scaleIn 0.3s;
+    text-align: center;
+}
+
+.stats-scrollable-content {
+    max-height: calc(80vh - 150px);
+    overflow-y: auto;
+    padding-right: 5px;
+    margin-bottom: 20px;
+}
+
+/* Custom scrollbar for stats modal */
+.stats-scrollable-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.stats-scrollable-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.stats-scrollable-content::-webkit-scrollbar-thumb {
+    background: var(--primary-color);
+    border-radius: 3px;
+}
+
+.stats-scrollable-content::-webkit-scrollbar-thumb:hover {
+    background: #1a5a9e;
+}
+
+.stats-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin: 20px 0;
+    padding: 10px;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.stat-label {
+    font-weight: bold;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.stat-value {
+    font-weight: bold;
+    color: var(--primary-color);
+    font-size: 16px;
+}
+
+#stats-back-btn {
+    margin-top: 20px;
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    .stats-content {
+        width: 95%;
+        max-width: 350px;
+        margin: 5% auto;
+        padding: 15px;
+    }
+    
+    .stat-item {
+        padding: 8px 12px;
+    }
+    
+    .stat-label {
+        font-size: 13px;
+    }
+    
+    .stat-value {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .stats-content {
+        width: 95%;
+        max-width: 320px;
+        margin: 10% auto;
+        padding: 15px;
+    }
+    
+    .stat-item {
+        padding: 6px 10px;
+    }
+    
+    .stat-label {
+        font-size: 12px;
+    }
+    
+    .stat-value {
+        font-size: 13px;
+    }
+}
+
+/* Enhanced Statistics Styles */
+.stats-tabs {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #ddd;
+}
+
+.tab-button {
+    background: none;
+    border: none;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #666;
+    border-bottom: 2px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.tab-button.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+    font-weight: bold;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.stats-section {
+    margin-bottom: 25px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.stats-section h3 {
+    color: var(--primary-color);
+    margin-bottom: 15px;
+    font-size: 18px;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 8px;
+}
+
+.difficulty-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.leaderboard-title-icon {
+    color: var(--secondary-color);
+    margin-right: 6px;
+}
+
+/* The leaderboard modal reuses .stats-content but needs more room per
+   row than the Statistics modal, so it gets its own wider sizing here
+   without touching #stats-modal. */
+#leaderboard-modal .stats-content {
+    max-width: 480px;
+    width: 94%;
+    padding: 22px 14px;
+}
+
+@media (max-width: 480px) {
+    #leaderboard-modal .stats-content {
+        max-width: 420px;
+        width: 97%;
+        padding: 18px 8px;
+    }
+}
+
+.leaderboard-note {
+    color: #888;
+    font-size: 14px;
+    text-align: center;
+    margin: 16px 0;
+}
+
+.leaderboard-list {
+    list-style: none;
+    margin: 0;
+    padding: 4px 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.leaderboard-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: #ffffff;
+    border: 1px solid #eceff3;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.leaderboard-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.1);
+}
+
+/* Top 3 get a subtle tinted, elevated look */
+.leaderboard-top {
+    border-width: 1px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.leaderboard-top.rank-1 {
+    background: linear-gradient(135deg, #fff8e6, #fffdf7);
+    border-color: #f0d68a;
+}
+
+.leaderboard-top.rank-2 {
+    background: linear-gradient(135deg, #f3f5f7, #fdfdfe);
+    border-color: #d7dce2;
+}
+
+.leaderboard-top.rank-3 {
+    background: linear-gradient(135deg, #fdf1e8, #fffaf6);
+    border-color: #eab98c;
+}
+
+.leaderboard-item.leaderboard-me {
+    border: 1.5px solid var(--primary-color);
+    background: rgba(43, 112, 197, 0.07);
+    box-shadow: 0 2px 8px rgba(43, 112, 197, 0.18);
+}
+
+.leaderboard-rank {
+    flex-shrink: 0;
+    width: 32px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--primary-color);
+}
+
+.leaderboard-medal {
+    font-size: 22px;
+    line-height: 1;
+}
+
+.leaderboard-info {
+    flex-grow: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+}
+
+.leaderboard-name {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #22262b;
+    min-width: 0;
+}
+
+.leaderboard-username-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+/* VIP badge: active Pi Premium subscriber, or has paid Pi for at least
+   one theme/piece-set/level unlock (see isVipMember() in script.js). */
+.leaderboard-vip-badge {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #f5c451, #d1971e);
+    color: #4a2a00;
+    font-size: 10px;
+    box-shadow: 0 1px 4px rgba(209, 151, 30, 0.5);
+    cursor: help;
+}
+
+.leaderboard-stats {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    row-gap: 2px;
+    gap: 6px;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.leaderboard-wins {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--secondary-color);
+    font-weight: 600;
+}
+
+.leaderboard-wins i {
+    font-size: 11px;
+}
+
+.leaderboard-dot {
+    color: #c7ccd3;
+}
+
+.leaderboard-winrate {
+    flex-shrink: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--primary-color);
+    background: rgba(43, 112, 197, 0.1);
+    padding: 4px 10px;
+    border-radius: 999px;
+    min-width: 42px;
+    text-align: center;
+}
+
+.leaderboard-points-label {
+    font-size: 10px;
+    font-weight: 600;
+    margin-left: 2px;
+    opacity: 0.75;
+}
+
+.leaderboard-top.rank-1 .leaderboard-winrate {
+    color: #a67c00;
+    background: rgba(230, 180, 0, 0.16);
+}
+
+.leaderboard-top.rank-3 .leaderboard-winrate {
+    color: #a05a1f;
+    background: rgba(201, 123, 61, 0.16);
+}
+
+.diff-stat-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background-color: white;
+    border-radius: 5px;
+    margin-bottom: 5px;
+}
+
+.diff-label {
+    font-weight: bold;
+    color: #2c3e50;
+}
+
+.diff-value {
+    color: var(--primary-color);
+    font-weight: bold;
+}
+
+/* Enhanced stat items for better readability */
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    background-color: white;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    transition: all 0.3s ease;
+}
+
+.stat-item:hover {
+    background-color: #f0f0f0;
+    transform: translateX(5px);
+}
+
+.stat-label {
+    font-weight: bold;
+    color: #2c3e50;
+    font-size: 14px;
+}
+
+.stat-value {
+    font-weight: bold;
+    color: var(--primary-color);
+    font-size: 16px;
+}
+
+/* Responsive design for statistics */
+@media (max-width: 768px) {
+    .stats-tabs {
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .tab-button {
+        text-align: center;
+        padding: 8px;
+    }
+    
+    .difficulty-stats {
+        grid-template-columns: 1fr;
+    }
+    
+    .stats-section {
+        padding: 10px;
+    }
+    
+    .stat-item {
+        padding: 8px 10px;
+    }
+    
+    .stat-label {
+        font-size: 13px;
+    }
+    
+    .stat-value {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .stats-content {
+        width: 95%;
+        max-width: 320px;
+        margin: 10% auto;
+        padding: 15px;
+    }
+    
+    .stats-tabs {
+        margin-bottom: 15px;
+    }
+    
+    .tab-button {
+        font-size: 12px;
+        padding: 6px 8px;
+    }
+}
+
+/* ===== Unlock modal (paying to unlock a locked level/theme/piece set) ===== */
+.unlock-modal-content {
+    text-align: center;
+}
+.unlock-lock-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #8247e5, #5b2c99);
+    color: #fff;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 10px auto 15px;
+    box-shadow: 0 4px 10px rgba(91, 44, 153, 0.4);
+}
+/* Small category pill above the title (Difficulty Level / Board Theme /
+   Piece Set / Bundle) — kept from the previous layout since it's the only
+   thing telling the player at a glance which kind of item this modal is
+   for; script.js (showUnlockModal) sets its text directly. */
+.unlock-type-badge {
+    display: inline-block;
+    background: #f1ebfb;
+    color: #6a35b8;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 20px;
+    margin-bottom: 8px;
+}
+/* "You already used your free trial for this" pill — hidden by default,
+   shown by script.js only for a locked item the player has already
+   sampled once. */
+.unlock-tried-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    text-align: left;
+    background: #fff6e6;
+    color: #8a5c00;
+    font-size: 12.5px;
+    line-height: 1.4;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin: 10px auto 0;
+    max-width: 320px;
+}
+.unlock-tried-note i {
+    margin-top: 1px;
+    flex-shrink: 0;
+}
+.unlock-tried-note.hidden {
+    display: none;
+}
+.pi-coin-icon-small {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.25);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-weight: bold;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+.unlock-pay-btn {
+    background: linear-gradient(145deg, #8247e5, #5b2c99);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #fff;
+    border: none;
+    width: 100%;
+    max-width: 260px;
+    margin: 10px auto;
+}
+.unlock-pay-btn:hover {
+    background: linear-gradient(145deg, #7238d0, #4c2382);
+}
+.unlock-all-btn {
+    background: linear-gradient(145deg, #8247e5, #5b2c99);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #fff;
+    border: none;
+    width: 100%;
+    max-width: 260px;
+    margin: 10px auto;
+}
+.unlock-all-btn:hover {
+    background: linear-gradient(145deg, #7238d0, #4c2382);
+}
+.unlock-all-btn.hidden {
+    display: none;
+}
+.unlock-cancel-btn {
+    background: transparent;
+    color: #777;
+    border: 1px solid #ccc;
+    width: 100%;
+    max-width: 260px;
+    margin: 10px auto;
+}
+.unlock-cancel-btn:hover {
+    background: #f2f2f2;
+}
+
+/* ===== Pi Premium crown button (top-controls) ===== */
+.premium-crown-btn i {
+    color: #d1971e;
+    transition: color 0.2s, text-shadow 0.2s;
+}
+.premium-crown-btn:hover i {
+    color: #b5790a;
+}
+#premium-btn.premium-active i {
+    color: #f5c451;
+    text-shadow: 0 0 6px rgba(245, 196, 81, 0.75);
+}
+/* Gentle glow so a subscriber can always tell Premium is active at a glance */
+@keyframes premiumCrownGlow {
+    0%, 100% { text-shadow: 0 0 4px rgba(245, 196, 81, 0.5); }
+    50% { text-shadow: 0 0 10px rgba(245, 196, 81, 0.95); }
+}
+#premium-btn.premium-active i {
+    animation: premiumCrownGlow 2.4s ease-in-out infinite;
+}
+/* Eye-catching gold flash shown briefly after a new game starts, to draw
+   a non-subscriber's attention to the Premium button so they notice it's
+   there to try. Distinct from premiumCrownGlow above (which is the calm,
+   permanent glow for players who already subscribed) — this one is
+   faster and stronger, and JS removes the class after ~10s so it never
+   runs indefinitely. */
+@keyframes premiumAttentionFlash {
+    0%, 100% {
+        color: #d1971e;
+        text-shadow: none;
+        transform: scale(1);
+    }
+    50% {
+        color: #ffd700;
+        text-shadow: 0 0 12px rgba(255, 215, 0, 0.95), 0 0 22px rgba(255, 215, 0, 0.6);
+        transform: scale(1.18);
+    }
+}
+#premium-btn.premium-attention-flash i {
+    animation: premiumAttentionFlash 0.9s ease-in-out infinite;
+}
+@keyframes premiumAttentionPulseBg {
+    0%, 100% { box-shadow: none; }
+    50% { box-shadow: 0 0 14px 4px rgba(255, 215, 0, 0.55); border-radius: 50%; }
+}
+#premium-btn.premium-attention-flash {
+    animation: premiumAttentionPulseBg 0.9s ease-in-out infinite;
+}
+/* Days-left badge on the crown button — reuses the .feature-count circle
+   but in the gold Premium color instead of the default blue, so it reads
+   as "part of Premium" rather than a regular feature counter. */
+.premium-days-badge {
+    background: linear-gradient(145deg, #f5c451, #d1971e) !important;
+    color: #4a2a00 !important;
+    font-weight: 700;
+    cursor: help;
+}
+.premium-days-badge-warning {
+    background: linear-gradient(145deg, #ff8a5c, #e0522b) !important;
+    color: #fff !important;
+}
+
+/* ===== Pi Premium subscription modal ===== */
+.premium-modal-content {
+    text-align: center;
+    margin-top: 3vh;
+    /* Reserve real space at the bottom for the phone's own on-screen
+       nav bar (gesture bar / back-home-recents), not just plain vh —
+       env(safe-area-inset-bottom) is 0 on devices without one, so this
+       is a no-op there and only kicks in where it's actually needed. */
+    margin-bottom: max(3vh, env(safe-area-inset-bottom, 0px));
+    max-height: min(90vh, calc(94vh - env(safe-area-inset-bottom, 0px)));
+    overflow-y: auto;
+}
+.premium-crown-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #f5c451, #d1971e);
+    color: #fff;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 6px auto 12px;
+    box-shadow: 0 4px 10px rgba(209, 151, 30, 0.45);
+}
+.premium-modal-desc {
+    color: #555;
+    font-size: 14px;
+    margin: 0 auto 6px;
+    max-width: 360px;
+}
+.premium-plans {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: 14px;
+    margin: 18px 0 10px;
+    flex-wrap: wrap;
+}
+.premium-plan-card {
+    position: relative;
+    flex: 1 1 140px;
+    max-width: 175px;
+    background: #faf8ff;
+    border: 2px solid #e4dbf7;
+    border-radius: 14px;
+    padding: 20px 12px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.premium-plan-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 18px rgba(91, 44, 153, 0.18);
+    border-color: #c9b6f0;
+}
+.premium-plan-card:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+.premium-plan-name {
+    font-weight: 700;
+    color: #4a2a7a;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+.premium-plan-price {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 19px;
+    font-weight: 800;
+    color: #5b2c99;
+    margin-top: 6px;
+}
+.premium-plan-price .pi-coin-icon-small {
+    background: linear-gradient(145deg, #8247e5, #5b2c99);
+    color: #fff;
+}
+.premium-plan-sub {
+    font-size: 12px;
+    color: #9086a3;
+    margin-top: 2px;
+}
+.premium-plan-best {
+    border-color: #f5c451;
+    background: linear-gradient(180deg, #fffaf0 0%, #fdf3dc 100%);
+    box-shadow: 0 4px 16px rgba(245, 196, 81, 0.35);
+}
+.premium-plan-best:hover {
+    box-shadow: 0 10px 24px rgba(245, 196, 81, 0.5);
+    border-color: #f5c451;
+}
+.premium-best-badge {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(145deg, #f5c451, #d1971e);
+    color: #4a2a00;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 20px;
+    box-shadow: 0 2px 6px rgba(209, 151, 30, 0.45);
+    white-space: nowrap;
+}
+.premium-plan-savings {
+    margin-top: 8px;
+    font-size: 11px;
+    line-height: 1.3;
+    font-weight: 800;
+    color: #96650a;
+    background: rgba(245, 196, 81, 0.25);
+    padding: 4px 9px;
+    border-radius: 10px;
+    text-align: center;
+}
+.premium-status {
+    font-size: 13px;
+    color: #5b2c99;
+    font-weight: 700;
+    min-height: 18px;
+    line-height: 1.35;
+    margin: 4px 0 0;
+}
+.premium-status.premium-status-expired {
+    color: #d1491e;
+}
+.premium-fineprint {
+    font-size: 12px;
+    color: #6b5a8c;
+    margin: 8px auto 0;
+    max-width: 320px;
+}
+
+
+/* ============================================================
+   LARGE SCREEN / DESKTOP LAYOUT (computers, laptops, wide tablets)
+   ------------------------------------------------------------
+   Everything above this block is the original phone layout and is
+   left completely untouched.
+
+   This block is now driven by an actual "adaptive layout" approach:
+   JavaScript (script.js) detects the device/viewport on load and on
+   resize, and toggles a class on <html> — device-mobile / device-tablet
+   / device-desktop. CSS below reacts to that class instead of (only)
+   a width media query, which is what makes this a genuine layout
+   re-arrangement rather than a simple shrink: elements are moved to
+   different grid cells (not just resized), and the same mechanism can
+   be extended per device class (e.g. a distinct html.device-tablet
+   ruleset) without touching the phone rules above.
+
+   A @media fallback further below still applies the very first frame
+   (before JS finishes running) so there's no flash of the wrong layout.
+
+   Colors, gradients and visual style are all inherited unchanged from
+   the rules above — only sizing/position/order change here.
+   ============================================================ */
+html.device-desktop .game-page .container,
+html.device-tablet.orientation-landscape .game-page .container {
+    justify-content: center;
+    align-items: center;
+}
+
+html.device-desktop .game-container,
+html.device-tablet.orientation-landscape .game-container {
+    /* Single source of truth for the whole desktop layout scale.
+       Grows with viewport height/width, bounded so it never gets
+       absurdly small or large. */
+    --board-size: clamp(240px, min(68vh, 46vw), 780px);
+    flex-grow: 0;
+    display: grid;
+    grid-template-columns: var(--board-size) calc(var(--board-size) * 0.22);
+    grid-template-rows: auto auto auto minmax(var(--board-size), auto) auto;
+    column-gap: clamp(16px, 2vw, 32px);
+    row-gap: 10px;
+    justify-content: center;
+    align-items: start;
+    padding-bottom: 0;
+}
+
+/* ---- Left column: everything the phone layout already stacks
+   vertically (top bar, status, indicators, board) stays stacked,
+   just pinned to board-width and to grid rows 1-3 & 5. ---- */
+html.device-desktop .game-info-container,
+html.device-tablet.orientation-landscape .game-info-container {
+    grid-column: 1;
+    grid-row: 1;
+    width: var(--board-size);
+    max-width: var(--board-size);
+    margin: 0;
+    padding: calc(var(--board-size) * 0.018) calc(var(--board-size) * 0.025);
+}
+html.device-desktop .threat-report,
+html.device-tablet.orientation-landscape .threat-report {
+    grid-column: 1;
+    max-width: var(--board-size);
+    width: var(--board-size);
+    font-size: calc(var(--board-size) * 0.024);
+}
+html.device-desktop .game-status,
+html.device-tablet.orientation-landscape .game-status {
+    grid-column: 1;
+    grid-row: 2;
+    width: var(--board-size);
+    max-width: var(--board-size);
+    margin: 0 auto;
+}
+html.device-desktop #bot-indicator,
+html.device-tablet.orientation-landscape #bot-indicator {
+    grid-column: 1;
+    grid-row: 3;
+}
+html.device-desktop .board-container,
+html.device-tablet.orientation-landscape .board-container {
+    grid-column: 1;
+    grid-row: 4;
+    margin: 0;
+    align-self: center;
+}
+html.device-desktop #white-player-indicator,
+html.device-tablet.orientation-landscape #white-player-indicator {
+    grid-column: 1;
+    grid-row: 5;
+}
+html.device-desktop .side-indicator-row,
+html.device-tablet.orientation-landscape .side-indicator-row {
+    width: var(--board-size);
+    max-width: var(--board-size);
+}
+html.device-desktop .chessboard,
+html.device-tablet.orientation-landscape .chessboard {
+    width: var(--board-size);
+    height: var(--board-size);
+    max-width: none;
+    max-height: none;
+    font-size: calc(var(--board-size) / 8 * 0.9);
+}
+
+/* ---- Right column: vertical properties bar, same height as
+   the board, taking the place of the old bottom icon strip. ---- */
+html.device-desktop .controls-bottom,
+html.device-tablet.orientation-landscape .controls-bottom {
+    grid-column: 2;
+    grid-row: 4;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    justify-content: space-evenly;
+    align-items: center;
+    align-self: center;
+    width: 100%;
+    height: auto;
+    min-height: var(--board-size);
+    margin: 0;
+    padding: calc(var(--board-size) * 0.015) calc(var(--board-size) * 0.008);
+    gap: calc(var(--board-size) * 0.006);
+}
+html.device-desktop .controls-bottom .control-icon,
+html.device-tablet.orientation-landscape .controls-bottom .control-icon {
+    max-width: none;
+    width: 100%;
+    padding: calc(var(--board-size) * 0.007) 4px;
+}
+html.device-desktop .controls-bottom .control-icon i,
+html.device-tablet.orientation-landscape .controls-bottom .control-icon i {
+    width: calc(var(--board-size) * 0.065);
+    height: calc(var(--board-size) * 0.065);
+    font-size: calc(var(--board-size) * 0.032);
+    margin-bottom: calc(var(--board-size) * 0.006);
+}
+html.device-desktop .controls-bottom .control-icon span,
+html.device-tablet.orientation-landscape .controls-bottom .control-icon span {
+    font-size: calc(var(--board-size) * 0.021);
+}
+html.device-desktop .controls-bottom .feature-count,
+html.device-tablet.orientation-landscape .controls-bottom .feature-count {
+    width: calc(var(--board-size) * 0.04);
+    height: calc(var(--board-size) * 0.04);
+    font-size: calc(var(--board-size) * 0.022);
+    top: calc(var(--board-size) * -0.01);
+    right: calc(var(--board-size) * -0.01);
+}
+html.device-desktop .controls-bottom .pi-coin-icon,
+html.device-tablet.orientation-landscape .controls-bottom .pi-coin-icon {
+    width: calc(var(--board-size) * 0.065);
+    height: calc(var(--board-size) * 0.065);
+    font-size: calc(var(--board-size) * 0.032);
+    margin-bottom: calc(var(--board-size) * 0.006);
+}
+
+/* ---- Top bar keeps its own icons in sync with board-size too ---- */
+html.device-desktop .game-info-container .control-icon i,
+html.device-tablet.orientation-landscape .game-info-container .control-icon i {
+    width: calc(var(--board-size) * 0.07);
+    height: calc(var(--board-size) * 0.07);
+    font-size: calc(var(--board-size) * 0.035);
+}
+html.device-desktop .game-timer-display,
+html.device-tablet.orientation-landscape .game-timer-display {
+    font-size: calc(var(--board-size) * 0.045);
+}
+html.device-desktop .game-timer-label,
+html.device-tablet.orientation-landscape .game-timer-label {
+    font-size: calc(var(--board-size) * 0.024);
+}
+html.device-desktop .side-indicator-pill,
+html.device-tablet.orientation-landscape .side-indicator-pill {
+    font-size: calc(var(--board-size) * 0.028);
+    padding: calc(var(--board-size) * 0.012) calc(var(--board-size) * 0.025);
+    gap: calc(var(--board-size) * 0.014);
+}
+html.device-desktop #player-text,
+html.device-tablet.orientation-landscape #player-text {
+    max-width: calc(var(--board-size) * 0.22);
+}
+html.device-desktop .player-color-indicator,
+html.device-tablet.orientation-landscape .player-color-indicator {
+    width: calc(var(--board-size) * 0.032);
+    height: calc(var(--board-size) * 0.032);
+}
+
+/* ---- One-frame fallback: applies the same desktop rules purely by
+   viewport width, in case this paints before script.js has attached
+   the device-desktop class (e.g. very first paint). JS then takes
+   over immediately and keeps the class in sync on every resize. ---- */
+@media (min-width: 1024px) {
+    html:not(.device-mobile):not(.device-tablet) .game-container {
+        --board-size: clamp(240px, min(68vh, 46vw), 780px);
+    }
+}
